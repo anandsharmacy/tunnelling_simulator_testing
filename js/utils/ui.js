@@ -257,7 +257,7 @@ function setDrawerOpen(isOpen) {
   toggle.querySelector('.drawer-toggle-icon').textContent = isOpen ? '‹' : '›';
   try {
     window.localStorage.setItem(DRAWER_STORAGE_KEY, isOpen ? '1' : '0');
-  } catch (err) {
+  } catch {
     // Ignore storage failures; the drawer still works without persistence.
   }
 }
@@ -270,8 +270,8 @@ function initDrawerToggle() {
   let isOpen = false;
   try {
     isOpen = window.localStorage.getItem(DRAWER_STORAGE_KEY) === '1';
-  } catch (err) {
-    isOpen = false;
+  } catch {
+    // Ignore storage failures and keep default closed state.
   }
 
   setDrawerOpen(isOpen);
