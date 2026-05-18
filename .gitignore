@@ -1,0 +1,4 @@
+node_modules/
+css/tailwind.css
+.DS_Store
+dist/

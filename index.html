@@ -1,0 +1,402 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Quantum Tunneling Effect Simulator – NMIMS</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Crimson+Pro:ital,wght@0,300;0,400;0,600;1,300&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="css/tailwind.css" />
+    <link rel="stylesheet" href="css/components.css?v=20260517-drawer" />
+    <script type="module" src="js/theme-toggle.js?v=20260517-drawer" defer></script>
+    <script type="module" src="js/mode-toggle.js?v=20260517-drawer" defer></script>
+    <script type="module" src="js/utils/ui.js?v=20260517-drawer" defer></script>
+  </head>
+
+  <body>
+    <div id="header-container"></div>
+
+    <main class="body">
+      <!-- Left nav -->
+      <nav class="left-nav" id="info-drawer" aria-label="Information drawer">
+        <button class="drawer-toggle" id="btn-drawer-toggle" type="button" aria-expanded="false" aria-controls="info-drawer-panel">
+          <span class="drawer-toggle-icon" aria-hidden="true">›</span>
+          <span class="drawer-toggle-label">Info</span>
+        </button>
+        <div class="left-nav-panel" id="info-drawer-panel">
+          <button class="nav-item" id="btn-info">Info</button>
+          <button class="nav-item" id="btn-equation">Equation used</button>
+          <button class="nav-item" id="btn-working">Working Process</button>
+        </div>
+      </nav>
+
+      <!-- Center -->
+      <section class="center">
+        <div class="sim-wrap" id="sim-wrap">
+          <canvas id="simCanvas"></canvas>
+
+          <!-- Info -->
+          <article class="panel" id="panel-info">
+            <h2>About Quantum Tunneling</h2>
+            <p>
+              Quantum tunneling is a quantum mechanical phenomenon where a
+              particle passes through a potential energy barrier that classical
+              physics would deem impenetrable. It arises because particles
+              exhibit wave-like behavior governed by the Schrödinger equation —
+              the wavefunction ψ has a non-zero amplitude on both sides of the
+              barrier.
+            </p>
+            <p>
+              The simulation displays
+              <strong class="text-teal">scattering components</strong>:
+              incident, reflected, and transmitted waves. The barrier region
+              shows exponential decay for tunneling (E &lt; V₀), along with the
+              <strong class="text-purple">probability density |ψ|²</strong>
+              overlay when enabled.
+            </p>
+            <p>
+              Use the <strong>Time Dependent / Independent</strong> menu for
+              temporal behavior and per-wave visibility toggles, while keeping
+              the same physical controls for barrier height, width, and
+              particle energy.
+            </p>
+            <p>
+              The simulator also renders the
+              <strong class="text-steel">potential V(x)</strong> in steel-blue.
+            </p>
+            <h3>Real-World Applications</h3>
+            <p>
+              Nuclear fusion in stars · Scanning Tunneling Microscopes (STM) ·
+              Tunnel diodes · Flash memory (NAND) · Enzyme catalysis · Alpha
+              decay
+            </p>
+            <h3>About this Simulator</h3>
+            <p>
+              The TDSE is solved with the
+              <strong>Crank–Nicolson</strong> implicit scheme — unconditionally
+              stable, unitary (norm-preserving), and 2nd-order accurate in both
+              Δx and Δt.
+            </p>
+            <p class="info-note">
+              Press <strong class="text-red">▶ Simulator</strong> on the right
+              to view the live wavepacket animation.
+            </p>
+          </article>
+
+          <!-- Equation -->
+          <article class="panel" id="panel-equation">
+            <h2>Equations Used</h2>
+            <h3>Time-Dependent Schrödinger Equation</h3>
+            <div class="eq">
+              <span class="eq-lbl">Governing equation</span>iℏ ∂ψ/∂t = Ĥψ =
+              [−ℏ²/2m · ∂²/∂x² + V(x)] ψ
+            </div>
+            <h3>Crank–Nicolson Scheme</h3>
+            <div class="eq">
+              <span class="eq-lbl">CN update (α = Δt/2ℏ)</span>(I + iα·Ĥ) ψⁿ⁺¹ =
+              (I − iα·Ĥ) ψⁿ
+            </div>
+            <h3>Initial Gaussian Wavepacket</h3>
+            <div class="eq">
+              <span class="eq-lbl">ψ(x,0)</span>ψ = (2πσ²)^(−1/4) ·
+              exp[−(x−x₀)²/4σ²] · e^(ik₀x)
+            </div>
+            <h3>Transmission &amp; Reflection</h3>
+            <div class="eq">
+              <span class="eq-lbl">Probabilities</span>T = ∫_{x&gt;x_R} |ψ|² dx
+              &nbsp;|&nbsp; R = ∫_{x&lt;x_L} |ψ|² dx
+            </div>
+            <h3>WKB Estimate (rectangular barrier)</h3>
+            <div class="eq">
+              <span class="eq-lbl">Tunneling probability</span>T ≈ exp[−2L
+              √(2m(V₀−E)) / ℏ]
+            </div>
+          </article>
+
+          <!-- Working Process -->
+          <article class="panel" id="panel-working">
+            <h2>How the Simulator Works</h2>
+            <ol class="steps">
+              <li>
+                <strong>Grid init:</strong> N = 700 uniform points over x ∈
+                [−160, 160], ℏ = m = 1.
+              </li>
+              <li>
+                <strong>Potential V(x):</strong> Chosen barrier profile
+                evaluated on the grid.
+              </li>
+              <li>
+                <strong>Wavepacket:</strong> Normalised Gaussian ψ(x,0) with
+                momentum k₀ and spread σ, placed at x₀ = −100.
+              </li>
+              <li>
+                <strong>Hamiltonian:</strong> Kinetic energy via central
+                differences → tridiagonal matrix H with V(x) on diagonal.
+              </li>
+              <li>
+                <strong>CN matrices:</strong> A = I + iαH, B = I − iαH
+                assembled; Thomas forward-sweep precomputed once.
+              </li>
+              <li>
+                <strong>Time loop:</strong> (1) RHS = B·ψⁿ, (2) solve A·ψⁿ⁺¹ =
+                RHS via Thomas O(N), (3) absorb outgoing waves near ±160, (4)
+                clamp only tiny numerical norm growth.
+              </li>
+              <li>
+                <strong>Rendering:</strong> Scattering components (incident,
+                reflected, transmitted) and V(x) steel-blue, with optional |ψ|²
+                overlay.
+              </li>
+              <li>
+                <strong>Readouts:</strong> T and R computed by integrating |ψ|²
+                over right/left domains in real time.
+              </li>
+            </ol>
+          </article>
+
+          <!-- Height toast (inside sim-wrap for positioning) -->
+          <div class="height-toast" id="height-toast">
+            <button class="toast-close" id="btn-close-toast">✕</button>
+            <div class="toast-title" id="toast-title">
+              <span class="toast-star">⭐</span
+              ><span id="toast-title-text"
+                >Effect of changing barrier height</span
+              >
+            </div>
+            <div id="toast-body"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right controls -->
+      <aside class="right-ctrl">
+        <div class="btn-group">
+          <button class="rbtn flex-1" id="btn-simulator">▶ Simulator</button>
+          <button class="rbtn gray flex-1" id="btn-stop">■ Stop</button>
+        </div>
+
+        <button class="rbtn quick-param quick-height" id="btn-open-height">
+          Height (potential) V₀ in eV
+          <span class="quick-param-value">V₀ (eV) = <span id="v0-live">1.00</span></span>
+        </button>
+
+        <div class="btn-group">
+          <button class="rbtn gray rbtn-sm" id="btn-zoom-in">Zoom In</button>
+          <button class="rbtn gray rbtn-sm" id="btn-zoom-out">Zoom Out</button>
+          <button class="rbtn gray rbtn-sm" id="btn-zoom-reset">
+            Recenter
+          </button>
+        </div>
+
+        <button class="rbtn" id="btn-open-width">Menu</button>
+        <button class="rbtn gray" id="btn-reset">RESET</button>
+        <button class="rbtn" id="btn-open-mode">
+          Time Dependent /<br />Independent<br />
+          <span class="mbadge" id="modeBadge">T-DEPENDENT</span>
+        </button>
+
+        <section class="quick-slider-panel quick-slider-width" aria-label="Barrier width control">
+          <div class="quick-slider-header">
+            <span>Barrier width</span>
+            <span class="quick-slider-badge">nm</span>
+          </div>
+          <div class="quick-slider-live"><span id="bw-live">20.0</span> nm</div>
+          <label class="quick-slider-input-row" for="i-bw-main">
+            <input
+              type="number"
+              id="i-bw-main"
+              min="0.1"
+              max="60"
+              step="0.1"
+              value="20.0"
+            />
+            <span class="quick-slider-unit">nm</span>
+          </label>
+          <div class="speed-range quick-slider-range">
+            <input
+              type="range"
+              id="r-bw-main"
+              min="0.1"
+              max="60"
+              step="0.1"
+              value="20.0"
+            />
+          </div>
+          <div class="quick-slider-scale">
+            <span>0.1</span>
+            <span>60.0</span>
+          </div>
+        </section>
+
+        <section class="quick-slider-panel quick-slider-energy" aria-label="Particle energy control">
+          <div class="quick-slider-header">
+            <span>Particle energy</span>
+            <span class="quick-slider-badge">eV</span>
+          </div>
+          <div class="quick-slider-live"><span id="pe-live">0.0549</span> eV</div>
+          <label class="quick-slider-input-row" for="i-pe-main">
+            <input
+              type="number"
+              id="i-pe-main"
+              min="0.001"
+              max="50.0"
+              step="0.0001"
+              value="0.0549"
+            />
+            <span class="quick-slider-unit">eV</span>
+          </label>
+          <div class="speed-range quick-slider-range">
+            <input
+              type="range"
+              id="r-pe-main"
+              min="0"
+              max="1000"
+              step="1"
+              value="367"
+            />
+          </div>
+          <div class="quick-slider-scale">
+            <span>0.001</span>
+            <span>50.0</span>
+          </div>
+          <div class="quick-slider-note">Log slider for fine low-energy control</div>
+        </section>
+
+        <div class="quick-speed-panel speed-slider-control">
+          <div class="quick-speed-title">Speed <span class="speed-live-value" id="spd-live-main">4</span>x</div>
+          <div class="speed-range-wrap">
+            <div class="speed-range">
+              <input type="range" id="i-spd-main" min="1" max="7" step="1" value="4" />
+            </div>
+            <ul class="speed-range-labels">
+              <li class="active selected" data-speed="1">Normal</li>
+              <li data-speed="2">2x</li>
+              <li data-speed="3">3x</li>
+              <li data-speed="4">4x</li>
+              <li data-speed="5">5x</li>
+              <li data-speed="6">6x</li>
+              <li data-speed="7">7x</li>
+            </ul>
+          </div>
+        </div>
+      </aside>
+    </main>
+
+    <!-- Full-width footer status bar -->
+    <div id="footer-container"></div>
+
+    <div class="backdrop" id="m-width">
+      <div class="modal">
+        <button class="mclose" id="btn-close-width">✕</button>
+        <h3>Barrier Width &amp; Type</h3>
+        <div class="mrow">
+          <label>Barrier type</label>
+          <select id="i-pot">
+            <option value="single">Single Rectangular Barrier</option>
+            <option value="double">Double Slit</option>
+            <option value="step">Potential Step</option>
+            <option value="delta">Delta-like</option>
+            <option value="none">Free Particle (no barrier)</option>
+          </select>
+        </div>
+        <div class="mrow">
+          <label>Barrier width (nm)</label>
+          <input type="number" id="i-Vw" min="0.1" max="60" step="0.1" value="20" />
+        </div>
+        <div class="mrow">
+          <label>Particle energy (eV)</label>
+          <input
+            type="number"
+            id="i-Eev"
+            min="0.001"
+            max="50.0"
+            step="0.0001"
+            value="0.0549"
+          />
+        </div>
+        <div class="mrow">
+          <label>Wavepacket spread σ</label>
+          <input
+            type="number"
+            id="i-sig"
+            min="2"
+            max="14"
+            step="0.1"
+            value="5"
+          />
+        </div>
+        <div class="mrow">
+          <label>Sim speed (steps/frame) <span id="spd-live">4</span>x</label>
+          <div class="speed-range-wrap speed-slider-control">
+            <div class="speed-range">
+              <input type="range" id="i-spd" min="1" max="7" step="1" value="4" />
+            </div>
+            <ul class="speed-range-labels">
+              <li class="active selected" data-speed="1">Normal</li>
+              <li data-speed="2">2x</li>
+              <li data-speed="3">3x</li>
+              <li data-speed="4">4x</li>
+              <li data-speed="5">5x</li>
+              <li data-speed="6">6x</li>
+              <li data-speed="7">7x</li>
+            </ul>
+          </div>
+        </div>
+        <div class="mactions">
+          <button class="mok" id="btn-apply-width">Apply</button>
+          <button class="mcancel" id="btn-cancel-width">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mode modal -->
+    <div class="backdrop" id="m-mode">
+      <div class="modal">
+        <button class="mclose" id="btn-close-mode">✕</button>
+        <h3>Simulation Mode</h3>
+        <div class="mrow">
+          <label>Select mode</label>
+          <select id="i-mode">
+            <option value="td">Time-Dependent (wavepacket evolution)</option>
+            <option value="ti">Time-Independent (frozen snapshot)</option>
+          </select>
+        </div>
+        <div class="mrow wave-toggle-group">
+          <label>Show layers</label>
+          <label class="toggle-option">
+            <input type="checkbox" id="i-show-incident" checked />
+            <span>Incident wave</span>
+          </label>
+          <label class="toggle-option">
+            <input type="checkbox" id="i-show-reflected" checked />
+            <span>Reflected wave</span>
+          </label>
+          <label class="toggle-option">
+            <input type="checkbox" id="i-show-transmitted" checked />
+            <span>Transmitted wave</span>
+          </label>
+          <label class="toggle-option">
+            <input type="checkbox" id="i-show-probability" />
+            <span>Probability density |ψ|²</span>
+          </label>
+        </div>
+        <p class="modal-note">
+          <strong class="text-dark">Time-Dependent:</strong> Full CN
+          propagation, wavepacket evolves in real time.<br /><br />
+          <strong class="text-dark">Time-Independent:</strong> Pauses evolution
+          — static analysis of T and R.<br /><br />
+          <strong class="text-dark">Scattering view:</strong> Displays
+          incident, reflected, and transmitted components where
+          ψ<sub>total</sub> = ψ<sub>incident</sub> + ψ<sub>reflected</sub> +
+          ψ<sub>transmitted</sub>.
+        </p>
+        <div class="mactions">
+          <button class="mok" id="btn-apply-mode">Apply</button>
+          <button class="mcancel" id="btn-cancel-mode">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

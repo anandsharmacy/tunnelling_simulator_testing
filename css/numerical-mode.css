@@ -1,0 +1,270 @@
+.num-body {
+  justify-content: center;
+  align-items: flex-start;
+  padding: 18px;
+  overflow: auto;
+}
+
+.num-main {
+  max-width: 1040px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.num-header {
+  margin-bottom: 16px;
+}
+
+.num-header h2 {
+  font-size: 1.35rem;
+  margin-bottom: 6px;
+}
+
+.num-header p {
+  font-size: 0.86rem;
+  color: var(--text2);
+}
+
+.num-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.4fr);
+  gap: 16px;
+}
+
+.num-inputs,
+.num-results {
+  background: var(--white);
+  border-radius: 12px;
+  border: 1.5px solid var(--border);
+  padding: 18px 20px 20px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+}
+
+.num-inputs h3,
+.num-results h3 {
+  font-size: 1rem;
+  margin-bottom: 12px;
+}
+
+.form-row {
+  margin-bottom: 12px;
+}
+
+.form-row label {
+  display: block;
+  font-size: 0.8rem;
+  margin-bottom: 4px;
+  color: var(--text2);
+  font-weight: 500;
+}
+
+.form-row.split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 14px 0 6px;
+}
+
+.form-actions .rbtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.presets {
+  margin-top: 16px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+.presets h3 {
+  font-size: 0.9rem;
+  margin-bottom: 6px;
+}
+
+.presets-help {
+  font-size: 0.76rem;
+  color: var(--text3);
+  margin-bottom: 8px;
+}
+
+.preset-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.preset-buttons .rbtn {
+  padding: 9px 10px;
+  font-size: 0.76rem;
+}
+
+.preset-description {
+  margin-top: 8px;
+  font-size: 0.76rem;
+  color: var(--text2);
+}
+
+.message-area {
+  min-height: 40px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  margin-bottom: 12px;
+}
+
+.message-area.info {
+  background: var(--info-bg);
+  color: var(--info-text);
+  border: 1px solid var(--info-border);
+}
+
+.message-area.error {
+  background: var(--error-bg);
+  color: var(--error-text);
+  border: 1px solid var(--error-border);
+}
+
+.results-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.result-card {
+  background: var(--off);
+  border-radius: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+}
+
+.result-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text3);
+  margin-bottom: 4px;
+}
+
+.result-value {
+  font-size: 0.96rem;
+  font-weight: 700;
+  font-family: 'Crimson Pro', serif;
+}
+
+.result-note {
+  margin-top: 3px;
+  font-size: 0.7rem;
+  color: var(--text3);
+}
+
+.notes {
+  margin-top: 16px;
+}
+
+.ai-analysis {
+  margin-top: 16px;
+}
+
+.ai-analysis-head {
+  margin-bottom: 8px;
+}
+
+.ai-analysis-head h4 {
+  font-size: 0.86rem;
+  margin-bottom: 4px;
+}
+
+.ai-analysis-head p {
+  font-size: 0.76rem;
+  color: var(--text3);
+}
+
+.ai-explanation {
+  background: var(--off);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  min-height: 120px;
+}
+
+.ai-explanation.is-loading {
+  border-color: var(--info-border);
+  background: var(--info-bg);
+}
+
+.ai-explanation.is-error {
+  border-color: var(--error-border);
+  background: var(--error-bg);
+}
+
+.ai-explanation-status {
+  font-size: 0.78rem;
+  color: var(--text2);
+}
+
+.ai-explanation.is-loading .ai-explanation-status {
+  color: var(--info-text);
+}
+
+.ai-explanation.is-error .ai-explanation-status {
+  color: var(--error-text);
+}
+
+.ai-explanation-section + .ai-explanation-section {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.ai-explanation-label {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text3);
+  margin-bottom: 4px;
+}
+
+.ai-explanation-copy {
+  font-size: 0.8rem;
+  color: var(--text);
+  line-height: 1.55;
+}
+
+.notes h4 {
+  font-size: 0.86rem;
+  margin-bottom: 6px;
+}
+
+.notes ul {
+  padding-left: 16px;
+}
+
+.notes li {
+  font-size: 0.76rem;
+  color: var(--text2);
+  margin-bottom: 4px;
+}
+
+@media (max-width: 880px) {
+  .num-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .num-body {
+    padding: 10px;
+  }
+
+  .num-inputs,
+  .num-results {
+    padding: 14px 14px 16px;
+  }
+}

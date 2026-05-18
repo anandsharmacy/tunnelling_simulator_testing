@@ -1,0 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Project note: We disable preflight in tailwind.config.cjs to avoid
+   colliding with existing global resets. Enable preflight when ready to
+   fully migrate base styles. */

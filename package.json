@@ -1,0 +1,27 @@
+{
+  "name": "quantum-tunneling-simulator",
+  "version": "1.0.0",
+  "description": "Quantum Tunneling Effect Simulator",
+  "scripts": {
+    "format": "prettier --write .",
+    "lint": "eslint .",
+    "prepare": "npm run format && npm run lint",
+    "build:css": "tailwindcss -i src/styles/tailwind.css -o css/tailwind.css --minify",
+    "watch:css": "tailwindcss -i src/styles/tailwind.css -o css/tailwind.css --watch",
+    "test": "vitest --run"
+  },
+  "type": "module",
+  "author": "ANAND",
+  "license": "MIT",
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@fast-check/vitest": "^0.3.0",
+    "autoprefixer": "^10.5.0",
+    "eslint": "^10.0.2",
+    "fast-check": "^4.6.0",
+    "postcss": "^8.5.14",
+    "prettier": "^3.8.1",
+    "tailwindcss": "^3.4.19",
+    "vitest": "^4.1.0"
+  }
+}
