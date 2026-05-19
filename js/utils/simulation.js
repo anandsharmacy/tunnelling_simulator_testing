@@ -31,6 +31,16 @@ let dx, x_, psiR, psiI, V_;
 let A_dR, A_dI, B_dR, B_dI, A_oI, B_oI, cpR, cpI, rhsR, rhsI;
 let fftWorkspace = null;
 
+// Continuous source injection from x = -120
+let continuousSourceActive = false;
+const SOURCE_ORIGIN = -120;
+let sourceAmplitude = 0.3;
+let sourceRampSteps = 200; // Ramp-in period to avoid startup spikes
+let sourceRampStep = 0; // Current ramp counter
+let leftFluxAccum = 0; // Accumulated leftward flux (reflection)
+let rightFluxAccum = 0; // Accumulated rightward flux (transmission)
+let fluxMeasureCount = 0; // Count of flux measurements for averaging
+
 const WAVE_COLORS = {
   potential: '#7c9ec5',
   incident: '#d62728',
@@ -196,11 +206,14 @@ export function thomas() {
 
 export function stepSim() {
   // One full time step:
-  // 1) build RHS with B, 2) solve with A, 3) absorb outgoing edge waves,
-  // 4) clamp any tiny numerical norm growth.
+  // 0) inject continuous source if enabled, 1) build RHS with B, 2) solve with A, 
+  // 3) absorb outgoing edge waves, 4) measure flux for continuous mode, 
+  // 5) clamp any tiny numerical norm growth.
+  injectSourceWave();
   applyB(psiR, psiI, rhsR, rhsI);
   thomas();
   applyOutgoingAbsorption();
+  measureAndAccumulateFlux();
   if (step % 40 === 0) {
     let normSq = 0;
     for (let i = 0; i < Nx; i++) normSq += psiR[i] * psiR[i] + psiI[i] * psiI[i];
@@ -368,22 +381,66 @@ function drawCurve(values, toX, toY, color, isVisible, { lineWidth = 2, alpha = 
   ctx.restore();
 }
 
+function injectSourceWave() {
+  // Inject continuous source wave from x = -120 if enabled
+  if (!continuousSourceActive) return;
+
+  // Ramp-in: gradual increase from 0 to full amplitude over sourceRampSteps
+  const rampFactor = Math.min(1.0, sourceRampStep / sourceRampSteps);
+  sourceRampStep += 1;
+
+  // Gaussian envelope centered at SOURCE_ORIGIN with width ~2*sigma
+  const injectionSigma = sigma;
+  const injectionNorm = Math.pow(1 / (2 * Math.PI * injectionSigma * injectionSigma), 0.25);
+
+  for (let i = 0; i < Nx; i++) {
+    const dx_i = x_[i] - SOURCE_ORIGIN;
+    const env = Math.exp(-(dx_i * dx_i) / (4 * injectionSigma * injectionSigma));
+    const phase = Math.cos(k0 * x_[i]); // Right-moving wave
+    const phaseI = Math.sin(k0 * x_[i]);
+
+    // Inject with ramped amplitude (dt/someScale to spread injection over time)
+    const injStr = (sourceAmplitude * rampFactor * env * injectionNorm * dt) / 10;
+    psiR[i] += injStr * phase;
+    psiI[i] += injStr * phaseI;
+  }
+
+  // Renormalize to maintain unit norm (guard against blowup)
+  let normSq = 0;
+  for (let i = 0; i < Nx; i++) normSq += psiR[i] * psiR[i] + psiI[i] * psiI[i];
+  normSq *= dx;
+  if (normSq > 1e-9 && normSq > 1.002) {
+    const scale = 1 / Math.sqrt(normSq);
+    for (let i = 0; i < Nx; i++) {
+      psiR[i] *= scale;
+      psiI[i] *= scale;
+    }
+  }
+}
+
 function applyOutgoingAbsorption() {
   const { posR, posI, negR, negI } = splitDirectionalComponents(psiR, psiI);
   let leftLoss = 0;
   let rightLoss = 0;
 
+  // If continuous source is active, protect a region near SOURCE_ORIGIN from left absorber
+  const SOURCE_PROTECTED_REGION = 35;
+  const sourceProtectionActive = continuousSourceActive;
+
   for (let i = 0; i < Nx; i++) {
     const x = x_[i];
 
     if (x <= x_min + ABSORBER_WIDTH) {
-      const edgeFraction = (x_min + ABSORBER_WIDTH - x) / ABSORBER_WIDTH;
-      const damping = Math.exp(-ABSORBER_STRENGTH * edgeFraction * edgeFraction);
-      const before = negR[i] * negR[i] + negI[i] * negI[i];
-      negR[i] *= damping;
-      negI[i] *= damping;
-      const after = negR[i] * negR[i] + negI[i] * negI[i];
-      leftLoss += before - after;
+      // Skip left absorber if inside protected source region and continuous mode active
+      if (!(sourceProtectionActive && Math.abs(x - SOURCE_ORIGIN) < SOURCE_PROTECTED_REGION)) {
+        const edgeFraction = (x_min + ABSORBER_WIDTH - x) / ABSORBER_WIDTH;
+        const damping = Math.exp(-ABSORBER_STRENGTH * edgeFraction * edgeFraction);
+        const before = negR[i] * negR[i] + negI[i] * negI[i];
+        negR[i] *= damping;
+        negI[i] *= damping;
+        const after = negR[i] * negR[i] + negI[i] * negI[i];
+        leftLoss += before - after;
+      }
     }
 
     if (x >= x_max - ABSORBER_WIDTH) {
@@ -430,6 +487,54 @@ export function computeYTickStep(ymax) {
   }
 
   return bestStep;
+}
+
+function measureAndAccumulateFlux() {
+  // Measure flux components for steady-state T/R in continuous source mode
+  if (!continuousSourceActive) return;
+
+  const { posR, negR } = splitDirectionalComponents(psiR, psiI);
+
+  // Probe points: left of barrier for reflected, right of barrier for transmitted
+  const iLeft = Math.max(
+    0,
+    Math.min(Nx - 1, Math.floor(((-80 - x_min) / (x_max - x_min)) * Nx))
+  );
+  const iRight = Math.max(
+    0,
+    Math.min(Nx - 1, Math.floor(((80 - x_min) / (x_max - x_min)) * Nx))
+  );
+
+  // Reflected: negative-k component at left probe
+  const reflectedProb = negR[iLeft] * negR[iLeft];
+  
+  // Transmitted: positive-k component at right probe
+  const transmittedProb = posR[iRight] * posR[iRight];
+
+  leftFluxAccum += reflectedProb;
+  rightFluxAccum += transmittedProb;
+  fluxMeasureCount += 1;
+}
+
+export function getFluxBasedTR() {
+  // Compute steady-state T/R from accumulated flux
+  if (fluxMeasureCount < 10) {
+    // Not enough data yet; return NaN or fallback
+    return { T: NaN, R: NaN };
+  }
+
+  const avgReflected = leftFluxAccum / fluxMeasureCount;
+  const avgTransmitted = rightFluxAccum / fluxMeasureCount;
+  const total = avgReflected + avgTransmitted;
+
+  if (total < 1e-9) {
+    return { T: 0, R: 0 };
+  }
+
+  return {
+    T: Math.min(1, avgTransmitted / total),
+    R: Math.min(1, avgReflected / total),
+  };
 }
 
 export function draw() {
@@ -660,8 +765,42 @@ export function draw() {
   pL *= dx;
   pRr *= dx;
   pT *= dx;
-  const displayR = Math.min(1, pL + absorbedLeftProb);
-  const displayT = Math.min(1, pRr + absorbedRightProb);
+  
+  // Determine T/R to display: flux-based if continuous mode active, else region-integral
+  let displayR, displayT;
+  if (continuousSourceActive) {
+    const fluxTR = getFluxBasedTR();
+    if (Number.isFinite(fluxTR.T) && Number.isFinite(fluxTR.R)) {
+      displayR = fluxTR.R;
+      displayT = fluxTR.T;
+    } else {
+      // Fallback during ramp-in
+      displayR = 0;
+      displayT = 0;
+    }
+  } else {
+    // Original region-integral approach
+    displayR = Math.min(1, pL + absorbedLeftProb);
+    displayT = Math.min(1, pRr + absorbedRightProb);
+  }
+  mode active, else region-integral
+  let displayR, displayT;
+  if (continuousSourceActive) {
+    const fluxTR = getFluxBasedTR();
+    if (Number.isFinite(fluxTR.T) && Number.isFinite(fluxTR.R)) {
+      displayR = fluxTR.R;
+      displayT = fluxTR.T;
+    } else {
+      // Fallback during ramp-in
+      displayR = 0;
+      displayT = 0;
+    }
+  } else {
+    // Original region-integral approach
+    displayR = Math.min(1, pL + absorbedLeftProb);
+    displayT = Math.min(1, pRr + absorbedRightProb);
+  }
+  
   const sT = document.getElementById('sT');
   const sR = document.getElementById('sR');
   const sN = document.getElementById('sN');
@@ -826,6 +965,34 @@ export function getViewportBounds() {
   };
 }
 
+export function getContinuousSourceActive() {
+  return continuousSourceActive;
+}
+
+export function setContinuousSourceActive(value) {
+  continuousSourceActive = Boolean(value);
+  if (continuousSourceActive) {
+    // Reset ramp and flux accumulators when enabling
+    sourceRampStep = 0;
+    leftFluxAccum = 0;
+    rightFluxAccum = 0;
+    fluxMeasureCount = 0;
+  }
+  return continuousSourceActive;
+}
+
+export function getSourceAmplitude() {
+  return sourceAmplitude;
+}
+
+export function setSourceAmplitude(value) {
+  const next = Number(value);
+  if (Number.isFinite(next)) {
+    sourceAmplitude = Math.max(0.01, Math.min(1.0, next));
+  }
+  return sourceAmplitude;
+}
+
 export function autoZoomBarrier() {
   const range = Math.max(24, Math.min(320, Vw_ * 80));
   view_x_min = -range / 2;
@@ -843,6 +1010,8 @@ export function syncModeModalFields() {
   if (speedEl) speedEl.value = String(stepsPerFrame);
   const speedMainEl = document.getElementById('i-spd-main');
   if (speedMainEl) speedMainEl.value = String(stepsPerFrame);
+  const continuousEl = document.getElementById('i-continuous-source');
+  if (continuousEl) continuousEl.checked = continuousSourceActive;
 }
 
 export function zoomIn() {
@@ -905,6 +1074,12 @@ export function applyMode() {
   document.getElementById('modeBadge').textContent = timeDependent
     ? 'T-DEPENDENT'
     : 'T-INDEPENDENT';
+  
+  // Read continuous source toggle
+  const continuousSourceCheckbox = document.getElementById('i-continuous-source');
+  if (continuousSourceCheckbox) {
+    continuousSourceActive = continuousSourceCheckbox.checked && timeDependent;
+  }
 }
 
 export function resetSim() {
@@ -915,6 +1090,11 @@ export function resetSim() {
   k0 = 1.2;
   sigma = 5.0;
   pot_type = 'single';
+  continuousSourceActive = false; // Disable continuous source on reset
+  sourceRampStep = 0;
+  leftFluxAccum = 0;
+  rightFluxAccum = 0;
+  fluxMeasureCount = 0;
   recenter(); // Reset zoom
 
   const v0Live = document.getElementById('v0-live');
@@ -936,6 +1116,8 @@ export function resetSim() {
   if (spdMainEl) spdMainEl.value = stepsPerFrame;
   const spdMainLive = document.getElementById('spd-live-main');
   if (spdMainLive) spdMainLive.textContent = String(stepsPerFrame);
+  const continuousEl = document.getElementById('i-continuous-source');
+  if (continuousEl) continuousEl.checked = false;
 
   buildV();
   buildCN();
