@@ -783,23 +783,6 @@ export function draw() {
     displayR = Math.min(1, pL + absorbedLeftProb);
     displayT = Math.min(1, pRr + absorbedRightProb);
   }
-  mode active, else region-integral
-  let displayR, displayT;
-  if (continuousSourceActive) {
-    const fluxTR = getFluxBasedTR();
-    if (Number.isFinite(fluxTR.T) && Number.isFinite(fluxTR.R)) {
-      displayR = fluxTR.R;
-      displayT = fluxTR.T;
-    } else {
-      // Fallback during ramp-in
-      displayR = 0;
-      displayT = 0;
-    }
-  } else {
-    // Original region-integral approach
-    displayR = Math.min(1, pL + absorbedLeftProb);
-    displayT = Math.min(1, pRr + absorbedRightProb);
-  }
   
   const sT = document.getElementById('sT');
   const sR = document.getElementById('sR');
