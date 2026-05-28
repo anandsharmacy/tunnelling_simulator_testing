@@ -11,19 +11,20 @@ let resizeObserver = null;
 // hbar = 1 and m = 1 simplify TDSE updates and keep arithmetic stable.
 const hbar = 1,
   m_ = 1,
-  x_min = -160,
+  SOURCE_ORIGIN = -160,
+  x_min = SOURCE_ORIGIN,
   x_max = 160;
 let view_x_min = x_min,
   view_x_max = x_max;
-let Nx = 700,
-  dt = 0.05,
-  step = 0,
+const Nx = 700,
+  dt = 0.05;
+let step = 0,
   running = true,
   stepsPerFrame = 4,
   timeDependent = true;
 export let k0 = 1.2,
   sigma = 5.0,
-  x0_ = -100,
+  x0_ = SOURCE_ORIGIN,
   pot_type = 'single',
   V0_ = 1.0,
   Vw_ = 20;
@@ -31,11 +32,10 @@ let dx, x_, psiR, psiI, V_;
 let A_dR, A_dI, B_dR, B_dI, A_oI, B_oI, cpR, cpI, rhsR, rhsI;
 let fftWorkspace = null;
 
-// Continuous source injection from x = -120
+// Continuous source injection from x = x_min (shared origin)
 let continuousSourceActive = false;
-const SOURCE_ORIGIN = -120;
 let sourceAmplitude = 0.3;
-let sourceRampSteps = 200; // Ramp-in period to avoid startup spikes
+const sourceRampSteps = 200; // Ramp-in period to avoid startup spikes
 let sourceRampStep = 0; // Current ramp counter
 let leftFluxAccum = 0; // Accumulated leftward flux (reflection)
 let rightFluxAccum = 0; // Accumulated rightward flux (transmission)
@@ -46,7 +46,7 @@ const WAVE_COLORS = {
   incident: '#d62728',
   reflected: '#1a3fbf',
   transmitted: '#16a085',
-  probability: '#8b5fbf',
+  probability: '#a263ea',
 };
 
 const ABSORBER_WIDTH = 24;
@@ -121,9 +121,9 @@ export function buildCN() {
   B_oI = -bt * coef;
   cpR = new Float64Array(Nx - 1);
   cpI = new Float64Array(Nx - 1);
-  let br = A_dR[0],
-    bi = A_dI[0],
-    mg = br * br + bi * bi;
+  const br = A_dR[0],
+    bi = A_dI[0];
+  let mg = br * br + bi * bi;
   cpR[0] = (A_oI * bi) / mg;
   cpI[0] = (A_oI * br) / mg;
   for (let i = 1; i < Nx - 1; i++) {
@@ -147,8 +147,9 @@ export function initPsi() {
   const nm = Math.pow(1 / (2 * Math.PI * sigma * sigma), 0.25);
   for (let i = 0; i < Nx; i++) {
     const e = Math.exp((-(x_[i] - x0_) * (x_[i] - x0_)) / (4 * sigma * sigma));
-    psiR[i] = nm * e * Math.cos(k0 * x_[i]);
-    psiI[i] = nm * e * Math.sin(k0 * x_[i]);
+    // Phase measured relative to the packet center for phase alignment
+    psiR[i] = nm * e * Math.cos(k0 * (x_[i] - x0_));
+    psiI[i] = nm * e * Math.sin(k0 * (x_[i] - x0_));
   }
   // Normalise
   let sum = 0;
@@ -182,9 +183,9 @@ export function thomas() {
   // Solve A * ψ^{n+1} = RHS using complex Thomas algorithm (O(N)).
   const dpR = new Float64Array(Nx),
     dpI = new Float64Array(Nx);
-  let br = A_dR[0],
-    bi = A_dI[0],
-    mg = br * br + bi * bi;
+  const br = A_dR[0],
+    bi = A_dI[0];
+  let mg = br * br + bi * bi;
   dpR[0] = (rhsR[0] * br + rhsI[0] * bi) / mg;
   dpI[0] = (rhsI[0] * br - rhsR[0] * bi) / mg;
   for (let i = 1; i < Nx; i++) {
@@ -382,7 +383,7 @@ function drawCurve(values, toX, toY, color, isVisible, { lineWidth = 2, alpha = 
 }
 
 function injectSourceWave() {
-  // Inject continuous source wave from x = -120 if enabled
+  // Inject continuous source wave from SOURCE_ORIGIN if enabled
   if (!continuousSourceActive) return;
 
   // Ramp-in: gradual increase from 0 to full amplitude over sourceRampSteps
@@ -396,8 +397,9 @@ function injectSourceWave() {
   for (let i = 0; i < Nx; i++) {
     const dx_i = x_[i] - SOURCE_ORIGIN;
     const env = Math.exp(-(dx_i * dx_i) / (4 * injectionSigma * injectionSigma));
-    const phase = Math.cos(k0 * x_[i]); // Right-moving wave
-    const phaseI = Math.sin(k0 * x_[i]);
+    // Phase aligned to the shared source origin
+    const phase = Math.cos(k0 * (x_[i] - SOURCE_ORIGIN)); // Right-moving wave
+    const phaseI = Math.sin(k0 * (x_[i] - SOURCE_ORIGIN));
 
     // Inject with ramped amplitude (dt/someScale to spread injection over time)
     const injStr = (sourceAmplitude * rampFactor * env * injectionNorm * dt) / 10;
@@ -464,6 +466,36 @@ function applyOutgoingAbsorption() {
 
   absorbedLeftProb += Math.max(0, leftLoss) * dx;
   absorbedRightProb += Math.max(0, rightLoss) * dx;
+}
+
+function clearPsi() {
+  if (!psiR || psiR.length !== Nx) psiR = new Float64Array(Nx);
+  else psiR.fill(0);
+  if (!psiI || psiI.length !== Nx) psiI = new Float64Array(Nx);
+  else psiI.fill(0);
+  absorbedLeftProb = 0;
+  absorbedRightProb = 0;
+  sourceRampStep = 0;
+  leftFluxAccum = 0;
+  rightFluxAccum = 0;
+  fluxMeasureCount = 0;
+}
+
+function getDefaultPacketCenter() {
+  // Keep the one-shot packet well inside the domain so the hard boundary
+  // does not clip the Gaussian and generate spurious ripples.
+  const boundaryMargin = Math.max(40, 6 * sigma);
+  return Math.min(-80, SOURCE_ORIGIN + boundaryMargin);
+}
+
+function initWaveState() {
+  if (continuousSourceActive) {
+    x0_ = SOURCE_ORIGIN;
+    clearPsi();
+  } else {
+    x0_ = getDefaultPacketCenter();
+    initPsi();
+  }
 }
 
 export function computeYTickStep(ymax) {
@@ -924,6 +956,13 @@ export function getStepCount() {
   return step;
 }
 
+export function getWaveNorm() {
+  if (!psiR || !psiI) return 0;
+  let normSq = 0;
+  for (let i = 0; i < Nx; i++) normSq += psiR[i] * psiR[i] + psiI[i] * psiI[i];
+  return normSq * dx;
+}
+
 export function setWaveOrigin(value) {
   const next = Number(value);
   if (Number.isFinite(next)) x0_ = next;
@@ -955,11 +994,9 @@ export function getContinuousSourceActive() {
 export function setContinuousSourceActive(value) {
   continuousSourceActive = Boolean(value);
   if (continuousSourceActive) {
-    // Reset ramp and flux accumulators when enabling
-    sourceRampStep = 0;
-    leftFluxAccum = 0;
-    rightFluxAccum = 0;
-    fluxMeasureCount = 0;
+    // Replace any existing packet with a fresh field centered at the source
+    x0_ = SOURCE_ORIGIN;
+    clearPsi();
   }
   return continuousSourceActive;
 }
@@ -1025,7 +1062,7 @@ export function initSimulation() {
   buildGrid();
   buildV();
   buildCN();
-  initPsi();
+  initWaveState();
   step = 0;
   running = true;
   resize();
@@ -1047,7 +1084,7 @@ export function applyWidth() {
   setSimulationSpeed(document.getElementById('i-spd').value);
   buildV();
   buildCN();
-  initPsi();
+  initWaveState();
   step = 0;
 }
 
@@ -1061,24 +1098,24 @@ export function applyMode() {
   // Read continuous source toggle
   const continuousSourceCheckbox = document.getElementById('i-continuous-source');
   if (continuousSourceCheckbox) {
-    continuousSourceActive = continuousSourceCheckbox.checked && timeDependent;
+    setContinuousSourceActive(continuousSourceCheckbox.checked && timeDependent);
   }
 }
 
 export function resetSim() {
-  // Restore default simulation parameters and UI mirrors.
-  V0_ = 1.0;
-  Vw_ = 20;
-  stepsPerFrame = 4;
-  k0 = 1.2;
-  sigma = 5.0;
-  pot_type = 'single';
-  continuousSourceActive = false; // Disable continuous source on reset
+  // Restart from the current configuration while clearing runtime state.
   sourceRampStep = 0;
   leftFluxAccum = 0;
   rightFluxAccum = 0;
   fluxMeasureCount = 0;
-  recenter(); // Reset zoom
+  absorbedLeftProb = 0;
+  absorbedRightProb = 0;
+  recenter();
+
+  buildV();
+  buildCN();
+  initWaveState();
+  step = 0;
 
   const v0Live = document.getElementById('v0-live');
   if (v0Live) v0Live.textContent = V0_.toFixed(2);
@@ -1099,11 +1136,10 @@ export function resetSim() {
   if (spdMainEl) spdMainEl.value = stepsPerFrame;
   const spdMainLive = document.getElementById('spd-live-main');
   if (spdMainLive) spdMainLive.textContent = String(stepsPerFrame);
+  const modeBadge = document.getElementById('modeBadge');
+  if (modeBadge) modeBadge.textContent = timeDependent
+    ? 'T-DEPENDENT'
+    : 'T-INDEPENDENT';
   const continuousEl = document.getElementById('i-continuous-source');
-  if (continuousEl) continuousEl.checked = false;
-
-  buildV();
-  buildCN();
-  initPsi();
-  step = 0;
+  if (continuousEl) continuousEl.checked = continuousSourceActive;
 }

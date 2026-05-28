@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   autoZoomBarrier,
   buildCN,
@@ -12,13 +12,13 @@ import {
   setParticleEnergyEv,
   zoomIn,
   zoomOut,
-} from './simulation.js';
+} from "./simulation.js";
 
 function createElement(overrides = {}) {
   return {
-    value: '',
+    value: "",
     checked: false,
-    textContent: '',
+    textContent: "",
     ...overrides,
   };
 }
@@ -31,19 +31,19 @@ function installDom(elements) {
   };
 }
 
-describe('smart barrier auto-scaling', () => {
+describe("smart barrier auto-scaling", () => {
   const originalDocument = globalThis.document;
 
   beforeEach(() => {
     installDom({
-      'i-Vw': createElement({ value: '20.0' }),
-      'i-Eev': createElement({ value: '0.0549' }),
-      'i-sig': createElement({ value: '5.0' }),
-      'i-spd': createElement({ value: '4' }),
-      'i-spd-main': createElement({ value: '4' }),
-      'spd-live': createElement({ textContent: '4' }),
-      'spd-live-main': createElement({ textContent: '4' }),
-      'v0-live': createElement({ textContent: '1.00' }),
+      "i-Vw": createElement({ value: "20.0" }),
+      "i-Eev": createElement({ value: "0.0549" }),
+      "i-sig": createElement({ value: "5.0" }),
+      "i-spd": createElement({ value: "4" }),
+      "i-spd-main": createElement({ value: "4" }),
+      "spd-live": createElement({ textContent: "4" }),
+      "spd-live-main": createElement({ textContent: "4" }),
+      "v0-live": createElement({ textContent: "1.00" }),
     });
 
     buildGrid();
@@ -57,7 +57,7 @@ describe('smart barrier auto-scaling', () => {
     globalThis.document = originalDocument;
   });
 
-  it('auto-fits the viewport for extremely narrow barriers', () => {
+  it("auto-fits the viewport for extremely narrow barriers", () => {
     setBarrierWidthNm(0.3);
 
     const viewport = getViewportBounds();
@@ -65,7 +65,7 @@ describe('smart barrier auto-scaling', () => {
     expect(viewport.center).toBeCloseTo(0, 1);
   });
 
-  it('reapplies the smart fit after energy or potential updates', () => {
+  it("reapplies the smart fit after energy or potential updates", () => {
     setBarrierWidthNm(0.3);
     recenter();
     setParticleEnergyEv(-0.4);
@@ -82,7 +82,7 @@ describe('smart barrier auto-scaling', () => {
     expect(viewport.center).toBeCloseTo(0, 1);
   });
 
-  it('keeps manual zoom centered on the barrier and clamped to the domain', () => {
+  it("keeps manual zoom centered on the barrier and clamped to the domain", () => {
     setBarrierWidthNm(0.3);
     recenter();
     zoomIn();

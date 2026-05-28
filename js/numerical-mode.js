@@ -14,68 +14,68 @@ const CONSTANTS = {
 };
 
 const PRESETS = {
-  'alpha-decay': {
-    label: 'Alpha decay (nuclear)',
+  "alpha-decay": {
+    label: "Alpha decay (nuclear)",
     description:
-      'Alpha particle of 3.5 MeV tunneling through a nuclear barrier of 18 MeV and width 2.5 fm.',
-    particleType: 'alpha',
+      "Alpha particle of 3.5 MeV tunneling through a nuclear barrier of 18 MeV and width 2.5 fm.",
+    particleType: "alpha",
     energy: 3.5,
-    energyUnit: 'MeV',
+    energyUnit: "MeV",
     barrierHeight: 18,
-    barrierHeightUnit: 'MeV',
+    barrierHeightUnit: "MeV",
     barrierWidth: 2.5,
-    barrierWidthUnit: 'fm',
+    barrierWidthUnit: "fm",
   },
   stm: {
-    label: 'STM-like tunneling',
+    label: "STM-like tunneling",
     description:
-      'Electron tunneling across a nanometre-scale vacuum gap, representative of an STM tip.',
-    particleType: 'electron',
+      "Electron tunneling across a nanometre-scale vacuum gap, representative of an STM tip.",
+    particleType: "electron",
     energy: 1.0,
-    energyUnit: 'eV',
+    energyUnit: "eV",
     barrierHeight: 4.0,
-    barrierHeightUnit: 'eV',
+    barrierHeightUnit: "eV",
     barrierWidth: 0.8,
-    barrierWidthUnit: 'nm',
+    barrierWidthUnit: "nm",
   },
 };
 
-const EXPLAIN_ENDPOINT = '/api/explain';
+const EXPLAIN_ENDPOINT = "/api/explain";
 
 let lastExplainPayload = null;
 let explainRequestToken = 0;
 
 function loadComponents() {
-  const headerEl = document.getElementById('header-container');
-  const footerEl = document.getElementById('footer-container');
+  const headerEl = document.getElementById("header-container");
+  const footerEl = document.getElementById("footer-container");
   if (!headerEl || !footerEl) return;
 
-  fetch('components/header.html')
-    .then((res) => (res.ok ? res.text() : ''))
+  fetch("components/header.html")
+    .then((res) => (res.ok ? res.text() : ""))
     .then((html) => {
       if (html) headerEl.innerHTML = html;
     })
-    .catch((err) => console.error('Failed to load header', err));
+    .catch((err) => console.error("Failed to load header", err));
 
-  fetch('components/footer.html')
-    .then((res) => (res.ok ? res.text() : ''))
+  fetch("components/footer.html")
+    .then((res) => (res.ok ? res.text() : ""))
     .then((html) => {
       if (html) footerEl.innerHTML = html;
     })
-    .catch((err) => console.error('Failed to load footer', err));
+    .catch((err) => console.error("Failed to load footer", err));
 }
 
 function energyToJoules(value, unit) {
   const x = Number(value);
   if (!Number.isFinite(x)) return NaN;
   switch (unit) {
-    case 'eV':
+    case "eV":
       return x * CONSTANTS.QE;
-    case 'keV':
+    case "keV":
       return x * 1e3 * CONSTANTS.QE;
-    case 'MeV':
+    case "MeV":
       return x * 1e6 * CONSTANTS.QE;
-    case 'J':
+    case "J":
       return x;
     default:
       return NaN;
@@ -86,15 +86,15 @@ function lengthToMeters(value, unit) {
   const x = Number(value);
   if (!Number.isFinite(x)) return NaN;
   switch (unit) {
-    case 'fm':
+    case "fm":
       return x * 1e-15;
-    case 'pm':
+    case "pm":
       return x * 1e-12;
-    case 'nm':
+    case "nm":
       return x * 1e-9;
-    case 'Angstrom':
+    case "Angstrom":
       return x * 1e-10;
-    case 'm':
+    case "m":
       return x;
     default:
       return NaN;
@@ -102,91 +102,97 @@ function lengthToMeters(value, unit) {
 }
 
 function formatSci(value, { precision = 3 } = {}) {
-  if (!Number.isFinite(value)) return '–';
-  if (value === 0) return '0';
+  if (!Number.isFinite(value)) return "–";
+  if (value === 0) return "0";
   const exp = Math.floor(Math.log10(Math.abs(value)));
   const mant = value / Math.pow(10, exp);
-  const mantStr = mant.toFixed(precision).replace(/\.0+$/, '');
+  const mantStr = mant.toFixed(precision).replace(/\.0+$/, "");
   return `${mantStr} × 10^${exp}`;
 }
 
 function formatFixed(value, digits = 4) {
-  if (!Number.isFinite(value)) return '–';
-  return value.toFixed(digits).replace(/0+$/, '').replace(/\.$/, '');
+  if (!Number.isFinite(value)) return "–";
+  return value.toFixed(digits).replace(/0+$/, "").replace(/\.$/, "");
 }
 
 function getFormSnapshot() {
   return {
-    particleType: document.getElementById('particle-type')?.value || '',
-    energyValue: document.getElementById('energy-value')?.value || '',
-    energyUnit: document.getElementById('energy-unit')?.value || '',
-    barrierHeightValue: document.getElementById('barrier-height-value')?.value || '',
-    barrierHeightUnit: document.getElementById('barrier-height-unit')?.value || '',
-    barrierWidthValue: document.getElementById('barrier-width-value')?.value || '',
-    barrierWidthUnit: document.getElementById('barrier-width-unit')?.value || '',
+    particleType: document.getElementById("particle-type")?.value || "",
+    energyValue: document.getElementById("energy-value")?.value || "",
+    energyUnit: document.getElementById("energy-unit")?.value || "",
+    barrierHeightValue:
+      document.getElementById("barrier-height-value")?.value || "",
+    barrierHeightUnit:
+      document.getElementById("barrier-height-unit")?.value || "",
+    barrierWidthValue:
+      document.getElementById("barrier-width-value")?.value || "",
+    barrierWidthUnit:
+      document.getElementById("barrier-width-unit")?.value || "",
   };
 }
 
 function setExplainButtonState({ disabled = true, loading = false } = {}) {
-  const button = document.getElementById('btn-explain');
+  const button = document.getElementById("btn-explain");
   if (!button) return;
 
   button.disabled = disabled;
-  button.textContent = loading ? 'Thinking…' : 'Explain with AI';
+  button.textContent = loading ? "Thinking…" : "Explain with AI";
 }
 
 function escapeHtml(value) {
   return String(value)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function renderExplanationState(state) {
-  const panel = document.getElementById('ai-explanation');
+  const panel = document.getElementById("ai-explanation");
   if (!panel) return;
 
-  panel.classList.remove('is-empty', 'is-loading', 'is-error');
+  panel.classList.remove("is-empty", "is-loading", "is-error");
 
-  if (state.type === 'loading') {
-    panel.classList.add('is-loading');
+  if (state.type === "loading") {
+    panel.classList.add("is-loading");
     panel.innerHTML = `<div class="ai-explanation-status">${escapeHtml(state.message)}</div>`;
     return;
   }
 
-  if (state.type === 'error') {
-    panel.classList.add('is-error');
+  if (state.type === "error") {
+    panel.classList.add("is-error");
     panel.innerHTML = `<div class="ai-explanation-status">${escapeHtml(state.message)}</div>`;
     return;
   }
 
-  if (state.type === 'ready') {
-    panel.classList.add('is-empty');
+  if (state.type === "ready") {
+    panel.classList.add("is-empty");
     panel.innerHTML = `<div class="ai-explanation-status">${escapeHtml(state.message)}</div>`;
     return;
   }
 
   const sections = [
-    ['Summary', state.summary],
-    ['Regime', state.regime],
-    ['Interpretation', state.interpretation],
-    ['Practical note', state.practicalNote],
+    ["Summary", state.summary],
+    ["Regime", state.regime],
+    ["Interpretation", state.interpretation],
+    ["Practical note", state.practicalNote],
   ].filter(([, value]) => value);
 
   panel.innerHTML = sections
     .map(
       ([label, copy]) =>
-        `<div class="ai-explanation-section"><div class="ai-explanation-label">${escapeHtml(label)}</div><div class="ai-explanation-copy">${escapeHtml(copy)}</div></div>`
+        `<div class="ai-explanation-section"><div class="ai-explanation-label">${escapeHtml(label)}</div><div class="ai-explanation-copy">${escapeHtml(copy)}</div></div>`,
     )
-    .join('');
+    .join("");
 }
 
 function buildExplainPayload(snapshot, result) {
   const energyLabel = `${snapshot.energyValue} ${snapshot.energyUnit}`.trim();
-  const barrierHeightLabel = `${snapshot.barrierHeightValue} ${snapshot.barrierHeightUnit}`.trim();
-  const barrierWidthLabel = `${snapshot.barrierWidthValue} ${snapshot.barrierWidthUnit}`.trim();
+  const barrierHeightLabel =
+    `${snapshot.barrierHeightValue} ${snapshot.barrierHeightUnit}`.trim();
+  const barrierWidthLabel =
+    `${snapshot.barrierWidthValue} ${snapshot.barrierWidthUnit}`.trim();
 
   return {
     particleType: snapshot.particleType,
@@ -200,7 +206,9 @@ function buildExplainPayload(snapshot, result) {
     delta: result.delta,
     lambda: result.lambda,
     betaL: result.betaL,
-    regime: result.usedApprox ? 'Approximate high/wide barrier regime' : 'Exact finite-barrier regime',
+    regime: result.usedApprox
+      ? "Approximate high/wide barrier regime"
+      : "Exact finite-barrier regime",
     messages: result.messages,
   };
 }
@@ -208,8 +216,9 @@ function buildExplainPayload(snapshot, result) {
 async function requestExplanation() {
   if (!lastExplainPayload) {
     renderExplanationState({
-      type: 'error',
-      message: 'Calculate a valid tunneling case before requesting AI analysis.',
+      type: "error",
+      message:
+        "Calculate a valid tunneling case before requesting AI analysis.",
     });
     setExplainButtonState({ disabled: true, loading: false });
     return;
@@ -218,14 +227,17 @@ async function requestExplanation() {
   explainRequestToken += 1;
   const requestToken = explainRequestToken;
 
-  renderExplanationState({ type: 'loading', message: 'Gemini is interpreting the tunneling result…' });
+  renderExplanationState({
+    type: "loading",
+    message: "Gemini is interpreting the tunneling result…",
+  });
   setExplainButtonState({ disabled: true, loading: true });
 
   try {
     const response = await fetch(EXPLAIN_ENDPOINT, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
       body: JSON.stringify(lastExplainPayload),
     });
@@ -234,22 +246,23 @@ async function requestExplanation() {
     if (requestToken !== explainRequestToken) return;
 
     if (!response.ok) {
-      throw new Error(data.error || 'Unable to fetch AI analysis.');
+      throw new Error(data.error || "Unable to fetch AI analysis.");
     }
 
     const explanation = data.explanation || {};
     renderExplanationState({
-      type: 'success',
-      summary: explanation.summary || '',
-      regime: explanation.regime || '',
-      interpretation: explanation.interpretation || '',
-      practicalNote: explanation.practicalNote || '',
+      type: "success",
+      summary: explanation.summary || "",
+      regime: explanation.regime || "",
+      interpretation: explanation.interpretation || "",
+      practicalNote: explanation.practicalNote || "",
     });
   } catch (error) {
     if (requestToken !== explainRequestToken) return;
     renderExplanationState({
-      type: 'error',
-      message: error instanceof Error ? error.message : 'Unable to fetch AI analysis.',
+      type: "error",
+      message:
+        error instanceof Error ? error.message : "Unable to fetch AI analysis.",
     });
   } finally {
     if (requestToken === explainRequestToken) {
@@ -270,7 +283,7 @@ function computeResults({
   const messages = [];
 
   if (!particleType || !(particleType in CONSTANTS.MASS)) {
-    messages.push('Please choose a valid particle type.');
+    messages.push("Please choose a valid particle type.");
     return { ok: false, messages };
   }
 
@@ -279,13 +292,13 @@ function computeResults({
   const L_input = Number(barrierWidthValue);
 
   if (!Number.isFinite(E_input) || E_input <= 0) {
-    messages.push('Enter a positive particle energy E.');
+    messages.push("Enter a positive particle energy E.");
   }
   if (!Number.isFinite(U0_input) || U0_input <= 0) {
-    messages.push('Enter a positive barrier height U₀.');
+    messages.push("Enter a positive barrier height U₀.");
   }
   if (!Number.isFinite(L_input) || L_input <= 0) {
-    messages.push('Enter a positive barrier width L.');
+    messages.push("Enter a positive barrier width L.");
   }
 
   const E_J = energyToJoules(E_input, energyUnit);
@@ -293,10 +306,10 @@ function computeResults({
   const L_m = lengthToMeters(L_input, barrierWidthUnit);
 
   if (!Number.isFinite(E_J) || !Number.isFinite(U0_J)) {
-    messages.push('Energy units not recognised.');
+    messages.push("Energy units not recognised.");
   }
   if (!Number.isFinite(L_m)) {
-    messages.push('Length units not recognised.');
+    messages.push("Length units not recognised.");
   }
 
   if (messages.length) {
@@ -307,13 +320,15 @@ function computeResults({
   const ratio = E_J / U0_J;
 
   if (ratio <= 0) {
-    messages.push('Energy must be less than barrier height for tunneling (E &lt; U₀).');
+    messages.push(
+      "Energy must be less than barrier height for tunneling (E &lt; U₀).",
+    );
     return { ok: false, messages };
   }
 
   if (ratio >= 1) {
     messages.push(
-      'This calculator is configured for tunneling (E &lt; U₀). For E ≥ U₀, use over-barrier scattering formulas instead.'
+      "This calculator is configured for tunneling (E &lt; U₀). For E ≥ U₀, use over-barrier scattering formulas instead.",
     );
     return {
       ok: true,
@@ -331,7 +346,8 @@ function computeResults({
   }
 
   // β
-  const betaSquared = (2 * mass * (U0_J - E_J)) / (CONSTANTS.HBAR * CONSTANTS.HBAR);
+  const betaSquared =
+    (2 * mass * (U0_J - E_J)) / (CONSTANTS.HBAR * CONSTANTS.HBAR);
   const beta = Math.sqrt(Math.max(betaSquared, 0));
 
   // γ from ratio E/U0
@@ -361,11 +377,11 @@ function computeResults({
     T = T_approx;
     usedApprox = true;
     messages.push(
-      `High/wide barrier regime detected (βL ≈ ${betaL.toFixed(2)}). Using approximate transmission formula.`
+      `High/wide barrier regime detected (βL ≈ ${betaL.toFixed(2)}). Using approximate transmission formula.`,
     );
   } else {
     messages.push(
-      `Exact transmission formula used (βL ≈ ${betaL.toFixed(2)}; approximation typically valid for βL ≳ 3).`
+      `Exact transmission formula used (βL ≈ ${betaL.toFixed(2)}; approximation typically valid for βL ≳ 3).`,
     );
   }
 
@@ -393,7 +409,7 @@ function computeResults({
 }
 
 function renderResults(result) {
-  const msgEl = document.getElementById('message-area');
+  const msgEl = document.getElementById("message-area");
   const setText = (id, text) => {
     const el = document.getElementById(id);
     if (el) el.textContent = text;
@@ -401,55 +417,69 @@ function renderResults(result) {
 
   if (!result.ok) {
     if (msgEl) {
-      msgEl.classList.add('error');
-      msgEl.classList.remove('info');
-      msgEl.innerHTML = result.messages.map((m) => `<div>${m}</div>`).join('');
+      msgEl.classList.add("error");
+      msgEl.classList.remove("info");
+      msgEl.innerHTML = result.messages.map((m) => `<div>${m}</div>`).join("");
     }
-    setText('result-T', '–');
-    setText('result-R', '–');
-    setText('result-EU0', '–');
-    setText('result-transmission-coefficient', '–');
-    setText('result-gamma', '–');
-    setText('result-delta', '–');
-    setText('result-lambda', '–');
+    setText("result-T", "–");
+    setText("result-R", "–");
+    setText("result-EU0", "–");
+    setText("result-transmission-coefficient", "–");
+    setText("result-gamma", "–");
+    setText("result-delta", "–");
+    setText("result-lambda", "–");
     return;
   }
 
   if (msgEl) {
-    msgEl.classList.remove('error');
-    msgEl.classList.add('info');
-    msgEl.innerHTML = result.messages.map((m) => `<div>${m}</div>`).join('');
+    msgEl.classList.remove("error");
+    msgEl.classList.add("info");
+    msgEl.innerHTML = result.messages.map((m) => `<div>${m}</div>`).join("");
   }
 
   const { T, R, ratio, gamma, delta, lambda } = result;
 
-  setText('result-T', Number.isFinite(T) ? formatSci(T, { precision: 3 }) : '–');
-  setText('result-R', Number.isFinite(R) ? formatSci(R, { precision: 3 }) : '–');
   setText(
-    'result-EU0',
-    Number.isFinite(ratio) ? ratio.toFixed(4).replace(/0+$/, '').replace(/\.$/, '') : '–'
+    "result-T",
+    Number.isFinite(T) ? formatSci(T, { precision: 3 }) : "–",
   );
   setText(
-    'result-transmission-coefficient',
-    Number.isFinite(T) ? formatSci(T, { precision: 3 }) : '–'
+    "result-R",
+    Number.isFinite(R) ? formatSci(R, { precision: 3 }) : "–",
   );
-  setText('result-gamma', Number.isFinite(gamma) ? gamma.toFixed(4) : '–');
-  setText('result-delta', Number.isFinite(delta) ? formatSci(delta, { precision: 3 }) : '–');
-  setText('result-lambda', Number.isFinite(lambda) ? formatSci(lambda, { precision: 3 }) : '–');
+  setText(
+    "result-EU0",
+    Number.isFinite(ratio)
+      ? ratio.toFixed(4).replace(/0+$/, "").replace(/\.$/, "")
+      : "–",
+  );
+  setText(
+    "result-transmission-coefficient",
+    Number.isFinite(T) ? formatSci(T, { precision: 3 }) : "–",
+  );
+  setText("result-gamma", Number.isFinite(gamma) ? gamma.toFixed(4) : "–");
+  setText(
+    "result-delta",
+    Number.isFinite(delta) ? formatSci(delta, { precision: 3 }) : "–",
+  );
+  setText(
+    "result-lambda",
+    Number.isFinite(lambda) ? formatSci(lambda, { precision: 3 }) : "–",
+  );
 }
 
 function applyPreset(key) {
   const preset = PRESETS[key];
   if (!preset) return;
 
-  const particleSelect = document.getElementById('particle-type');
-  const energyInput = document.getElementById('energy-value');
-  const energyUnitSelect = document.getElementById('energy-unit');
-  const bhInput = document.getElementById('barrier-height-value');
-  const bhUnitSelect = document.getElementById('barrier-height-unit');
-  const bwInput = document.getElementById('barrier-width-value');
-  const bwUnitSelect = document.getElementById('barrier-width-unit');
-  const descEl = document.getElementById('preset-description');
+  const particleSelect = document.getElementById("particle-type");
+  const energyInput = document.getElementById("energy-value");
+  const energyUnitSelect = document.getElementById("energy-unit");
+  const bhInput = document.getElementById("barrier-height-value");
+  const bhUnitSelect = document.getElementById("barrier-height-unit");
+  const bwInput = document.getElementById("barrier-width-value");
+  const bwUnitSelect = document.getElementById("barrier-width-unit");
+  const descEl = document.getElementById("preset-description");
 
   if (particleSelect) particleSelect.value = preset.particleType;
   if (energyInput) energyInput.value = String(preset.energy);
@@ -463,62 +493,60 @@ function applyPreset(key) {
 
 function resetForm() {
   const formElements = [
-    'energy-value',
-    'barrier-height-value',
-    'barrier-width-value',
+    "energy-value",
+    "barrier-height-value",
+    "barrier-width-value",
   ];
   formElements.forEach((id) => {
     const el = document.getElementById(id);
-    if (el) el.value = '';
+    if (el) el.value = "";
   });
 
-  const msgEl = document.getElementById('message-area');
+  const msgEl = document.getElementById("message-area");
   if (msgEl) {
-    msgEl.classList.remove('error', 'info');
-    msgEl.textContent = '';
+    msgEl.classList.remove("error", "info");
+    msgEl.textContent = "";
   }
 
   lastExplainPayload = null;
   explainRequestToken += 1;
   setExplainButtonState({ disabled: true, loading: false });
   renderExplanationState({
-    type: 'ready',
-    message: 'Calculate first, then use Explain with AI.',
+    type: "ready",
+    message: "Calculate first, then use Explain with AI.",
   });
 
   [
-    'result-T',
-    'result-R',
-    'result-EU0',
-    'result-transmission-coefficient',
-    'result-gamma',
-    'result-delta',
-    'result-lambda',
-  ].forEach(
-    (id) => {
-      const el = document.getElementById(id);
-      if (el) el.textContent = '–';
-    }
-  );
+    "result-T",
+    "result-R",
+    "result-EU0",
+    "result-transmission-coefficient",
+    "result-gamma",
+    "result-delta",
+    "result-lambda",
+  ].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = "–";
+  });
 
-  const descEl = document.getElementById('preset-description');
-  if (descEl) descEl.textContent = '';
+  const descEl = document.getElementById("preset-description");
+  if (descEl) descEl.textContent = "";
 }
 
 function initDefaults() {
-  const particleSelect = document.getElementById('particle-type');
-  if (particleSelect) particleSelect.value = 'alpha';
+  const particleSelect = document.getElementById("particle-type");
+  if (particleSelect) particleSelect.value = "alpha";
 
-  applyPreset('alpha-decay');
+  applyPreset("alpha-decay");
 }
 
 function initEvents() {
-  const calcBtn = document.getElementById('btn-calc');
-  const explainBtn = document.getElementById('btn-explain');
-  const resetBtn = document.getElementById('btn-reset');
+  const calcBtn = document.getElementById("btn-calc");
+  const explainBtn = document.getElementById("btn-explain");
+  const resetBtn = document.getElementById("btn-reset");
 
   if (calcBtn) {
-    calcBtn.addEventListener('click', (e) => {
+    calcBtn.addEventListener("click", (e) => {
       e.preventDefault();
       const snapshot = getFormSnapshot();
       const result = computeResults(snapshot);
@@ -529,45 +557,47 @@ function initEvents() {
         lastExplainPayload = buildExplainPayload(snapshot, result);
         setExplainButtonState({ disabled: false, loading: false });
         renderExplanationState({
-          type: 'ready',
-          message: 'Deterministic results are ready. Use Explain with AI for a Gemini interpretation.',
+          type: "ready",
+          message:
+            "Deterministic results are ready. Use Explain with AI for a Gemini interpretation.",
         });
       } else {
         lastExplainPayload = null;
         setExplainButtonState({ disabled: true, loading: false });
         renderExplanationState({
-          type: 'ready',
-          message: 'AI analysis is available only for valid tunneling results with E < U₀.',
+          type: "ready",
+          message:
+            "AI analysis is available only for valid tunneling results with E < U₀.",
         });
       }
     });
   }
 
   if (explainBtn) {
-    explainBtn.addEventListener('click', async (e) => {
+    explainBtn.addEventListener("click", async (e) => {
       e.preventDefault();
       await requestExplanation();
     });
   }
 
   if (resetBtn) {
-    resetBtn.addEventListener('click', (e) => {
+    resetBtn.addEventListener("click", (e) => {
       e.preventDefault();
       resetForm();
       initDefaults();
     });
   }
 
-  document.querySelectorAll('[data-preset]').forEach((btn) => {
-    btn.addEventListener('click', (e) => {
+  document.querySelectorAll("[data-preset]").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
       e.preventDefault();
-      const key = btn.getAttribute('data-preset');
+      const key = btn.getAttribute("data-preset");
       if (key) applyPreset(key);
     });
   });
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener("DOMContentLoaded", () => {
   loadComponents();
   resetForm();
   initDefaults();

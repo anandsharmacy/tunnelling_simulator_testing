@@ -24,8 +24,9 @@
         <header class="num-header">
           <h2>Numerical Mode: Quantum Tunneling Calculator</h2>
           <p>
-            Compute transmission and reflection probabilities, barrier decay parameters,
-            and related quantities for a rectangular quantum barrier.
+            Compute transmission and reflection probabilities, barrier decay
+            parameters, and related quantities for a rectangular quantum
+            barrier.
           </p>
         </header>
 
@@ -62,7 +63,12 @@
             <div class="form-row split">
               <div>
                 <label for="barrier-height-value">Barrier height U₀</label>
-                <input id="barrier-height-value" type="number" step="any" min="0" />
+                <input
+                  id="barrier-height-value"
+                  type="number"
+                  step="any"
+                  min="0"
+                />
               </div>
               <div>
                 <label for="barrier-height-unit">Height unit</label>
@@ -78,7 +84,12 @@
             <div class="form-row split">
               <div>
                 <label for="barrier-width-value">Barrier width L</label>
-                <input id="barrier-width-value" type="number" step="any" min="0" />
+                <input
+                  id="barrier-width-value"
+                  type="number"
+                  step="any"
+                  min="0"
+                />
               </div>
               <div>
                 <label for="barrier-width-unit">Length unit</label>
@@ -94,18 +105,25 @@
 
             <div class="form-actions">
               <button id="btn-calc" class="rbtn">Calculate</button>
-              <button id="btn-explain" class="rbtn gray" disabled>Explain with AI</button>
+              <button id="btn-explain" class="rbtn gray" disabled>
+                Explain with AI
+              </button>
               <button id="btn-reset" class="rbtn gray">Reset</button>
             </div>
 
             <section class="presets">
               <h3>Quick presets</h3>
               <p class="presets-help">
-                Use these as starting points; you can adjust the values after applying a preset.
+                Use these as starting points; you can adjust the values after
+                applying a preset.
               </p>
               <div class="preset-buttons">
-                <button class="rbtn gray" data-preset="alpha-decay">Alpha decay (nuclear)</button>
-                <button class="rbtn gray" data-preset="stm">STM-like tunneling</button>
+                <button class="rbtn gray" data-preset="alpha-decay">
+                  Alpha decay (nuclear)
+                </button>
+                <button class="rbtn gray" data-preset="stm">
+                  STM-like tunneling
+                </button>
               </div>
               <p id="preset-description" class="preset-description"></p>
             </section>
@@ -130,7 +148,9 @@
               </div>
               <div class="result-card">
                 <div class="result-label">Transmission coefficient</div>
-                <div id="result-transmission-coefficient" class="result-value">–</div>
+                <div id="result-transmission-coefficient" class="result-value">
+                  –
+                </div>
               </div>
               <div class="result-card">
                 <div class="result-label">Gamma parameter γ</div>
@@ -151,10 +171,14 @@
             <section class="ai-analysis">
               <div class="ai-analysis-head">
                 <h4>AI-generated analysis</h4>
-                <p>Uses Gemini to interpret the deterministic tunneling results.</p>
+                <p>
+                  Uses Gemini to interpret the deterministic tunneling results.
+                </p>
               </div>
               <div id="ai-explanation" class="ai-explanation is-empty">
-                <div class="ai-explanation-status">Calculate first, then use Explain with AI.</div>
+                <div class="ai-explanation-status">
+                  Calculate first, then use Explain with AI.
+                </div>
               </div>
             </section>
 
@@ -162,9 +186,14 @@
               <h4>Formulae used</h4>
               <ul>
                 <li>β² = (2m/ℏ²)(U₀ − E), valid for E &lt; U₀ (tunneling).</li>
-                <li>(γ/2)² = (1/4)[(1 − E/U₀)/(E/U₀) + (E/U₀)/(1 − E/U₀) − 2].</li>
+                <li>
+                  (γ/2)² = (1/4)[(1 − E/U₀)/(E/U₀) + (E/U₀)/(1 − E/U₀) − 2].
+                </li>
                 <li>T(L,E) = 1 / [cosh²(βL) + (γ/2)² sinh²(βL)] (exact).</li>
-                <li>T(L,E) ≈ 16(E/U₀)(1 − E/U₀) e^(−2βL) for high/wide barriers (βL ≳ 3).</li>
+                <li>
+                  T(L,E) ≈ 16(E/U₀)(1 − E/U₀) e^(−2βL) for high/wide barriers
+                  (βL ≳ 3).
+                </li>
               </ul>
             </section>
           </section>

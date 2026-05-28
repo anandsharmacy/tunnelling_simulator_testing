@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   applyMode,
   applyWidth,
@@ -20,13 +20,13 @@ import {
   sigma,
   stepSim,
   x0_,
-} from './simulation.js';
+} from "./simulation.js";
 
 function createElement(overrides = {}) {
   return {
-    value: '',
+    value: "",
     checked: false,
-    textContent: '',
+    textContent: "",
     ...overrides,
   };
 }
@@ -39,26 +39,26 @@ function installDom(elements) {
   };
 }
 
-describe('resetSim', () => {
+describe("resetSim", () => {
   const originalDocument = globalThis.document;
 
   beforeEach(() => {
     const elements = {
-      'i-pot': createElement({ value: 'delta' }),
-      'i-Vw': createElement({ value: '11.5' }),
-      'i-Eev': createElement({ value: '0.1250' }),
-      'i-sig': createElement({ value: '7.3' }),
-      'i-spd': createElement({ value: '6' }),
-      'i-spd-main': createElement({ value: '6' }),
-      'spd-live': createElement({ textContent: '6' }),
-      'spd-live-main': createElement({ textContent: '6' }),
-      'i-mode': createElement({ value: 'ti' }),
-      'i-show-incident': createElement({ checked: false }),
-      'i-show-reflected': createElement({ checked: true }),
-      'i-show-transmitted': createElement({ checked: false }),
-      'i-show-probability': createElement({ checked: true }),
-      'v0-live': createElement({ textContent: '2.75' }),
-      modeBadge: createElement({ textContent: 'T-DEPENDENT' }),
+      "i-pot": createElement({ value: "delta" }),
+      "i-Vw": createElement({ value: "11.5" }),
+      "i-Eev": createElement({ value: "0.1250" }),
+      "i-sig": createElement({ value: "7.3" }),
+      "i-spd": createElement({ value: "6" }),
+      "i-spd-main": createElement({ value: "6" }),
+      "spd-live": createElement({ textContent: "6" }),
+      "spd-live-main": createElement({ textContent: "6" }),
+      "i-mode": createElement({ value: "ti" }),
+      "i-show-incident": createElement({ checked: false }),
+      "i-show-reflected": createElement({ checked: true }),
+      "i-show-transmitted": createElement({ checked: false }),
+      "i-show-probability": createElement({ checked: true }),
+      "v0-live": createElement({ textContent: "2.75" }),
+      modeBadge: createElement({ textContent: "T-DEPENDENT" }),
     };
 
     installDom(elements);
@@ -72,7 +72,7 @@ describe('resetSim', () => {
     globalThis.document = originalDocument;
   });
 
-  it('preserves current control values and restarts from x = -160', () => {
+  it("preserves current control values and restarts from a safe in-domain packet center", () => {
     setBarrierPotential(2.75);
     applyWidth();
     applyMode();
@@ -85,7 +85,7 @@ describe('resetSim', () => {
     resetSim();
 
     expect(getBarrierPotential()).toBeCloseTo(2.75, 6);
-    expect(pot_type).toBe('delta');
+    expect(pot_type).toBe("delta");
     expect(getBarrierWidthNm()).toBeCloseTo(11.5, 6);
     expect(getParticleEnergyEv()).toBeCloseTo(0.125, 6);
     expect(sigma).toBeCloseTo(7.3, 6);
@@ -97,9 +97,15 @@ describe('resetSim', () => {
       transmitted: false,
       probability: true,
     });
-    expect(x0_).toBe(-160);
+    expect(x0_).toBeGreaterThan(-160);
+    expect(x0_).toBeGreaterThanOrEqual(-160 + 6 * sigma);
+    expect(x0_).toBeLessThanOrEqual(-80);
     expect(getStepCount()).toBe(0);
-    expect(globalThis.document.getElementById('modeBadge').textContent).toBe('T-INDEPENDENT');
-    expect(globalThis.document.getElementById('v0-live').textContent).toBe('2.75');
+    expect(globalThis.document.getElementById("modeBadge").textContent).toBe(
+      "T-INDEPENDENT",
+    );
+    expect(globalThis.document.getElementById("v0-live").textContent).toBe(
+      "2.75",
+    );
   });
 });

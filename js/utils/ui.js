@@ -24,18 +24,18 @@ import {
   k0,
   V0_,
   setRunning,
-} from './simulation.js?v=20260517';
+} from "./simulation.js?v=20260517";
 
 // Helper to display the height change toast (moved from original main.js)
 function showHeightToast(delta) {
-  const toast = document.getElementById('height-toast');
-  const titleEl = document.getElementById('toast-title');
-  const titleTxt = document.getElementById('toast-title-text');
-  const body = document.getElementById('toast-body');
+  const toast = document.getElementById("height-toast");
+  const titleEl = document.getElementById("toast-title");
+  const titleTxt = document.getElementById("toast-title-text");
+  const body = document.getElementById("toast-body");
   const E = ((k0 * k0) / 2).toFixed(2);
   if (delta > 0) {
-    titleEl.className = 'toast-title inc';
-    titleTxt.textContent = 'Effect of increasing barrier height';
+    titleEl.className = "toast-title inc";
+    titleTxt.textContent = "Effect of increasing barrier height";
     body.innerHTML = `
       <div class="toast-section">
         <div class="toast-section-title">Step-by-step effect</div>
@@ -54,8 +54,8 @@ function showHeightToast(delta) {
         <div class="toast-bullet"><span class="icon">📉</span>Wave cannot penetrate much → less transmission.</div>
       </div>`;
   } else {
-    titleEl.className = 'toast-title dec';
-    titleTxt.textContent = 'Effect of decreasing barrier height';
+    titleEl.className = "toast-title dec";
+    titleTxt.textContent = "Effect of decreasing barrier height";
     body.innerHTML = `
       <div class="toast-section">
         <div class="toast-section-title">If V₀ decreases:</div>
@@ -73,53 +73,56 @@ function showHeightToast(delta) {
       <div class="toast-cond">If V₀ < E:</div>
       <div class="toast-bullet"><span class="icon">👉</span>Not tunneling anymore → normal transmission</div>`;
   }
-  toast.classList.add('show');
+  toast.classList.add("show");
   if (window.toastTimer) clearTimeout(window.toastTimer);
-  window.toastTimer = setTimeout(() => toast.classList.remove('show'), 5000);
+  window.toastTimer = setTimeout(() => toast.classList.remove("show"), 5000);
 }
 
 function updateQuickParameterDisplays() {
   const width = getBarrierWidthNm();
   const energy = getParticleEnergyEv();
-  const widthValue = document.getElementById('bw-live');
-  const energyValue = document.getElementById('pe-live');
-  const potentialValue = document.getElementById('v0-live');
+  const widthValue = document.getElementById("bw-live");
+  const energyValue = document.getElementById("pe-live");
+  const potentialValue = document.getElementById("v0-live");
   if (widthValue) widthValue.textContent = width.toFixed(1);
   if (energyValue) energyValue.textContent = energy.toFixed(4);
-  if (potentialValue) potentialValue.textContent = getBarrierPotential().toFixed(2);
+  if (potentialValue)
+    potentialValue.textContent = getBarrierPotential().toFixed(2);
 
-  const widthInput = document.getElementById('i-bw-main');
+  const widthInput = document.getElementById("i-bw-main");
   if (widthInput) widthInput.value = width.toFixed(1);
-  const widthRange = document.getElementById('r-bw-main');
+  const widthRange = document.getElementById("r-bw-main");
   if (widthRange) {
     widthRange.value = width.toFixed(1);
     paintSliderTrack(
       widthRange,
-      ((width - Number(widthRange.min)) / (Number(widthRange.max) - Number(widthRange.min))) * 100
+      ((width - Number(widthRange.min)) /
+        (Number(widthRange.max) - Number(widthRange.min))) *
+        100,
     );
   }
 
-  const energyInput = document.getElementById('i-pe-main');
+  const energyInput = document.getElementById("i-pe-main");
   if (energyInput) energyInput.value = energy.toFixed(4);
-  const energyRange = document.getElementById('r-pe-main');
+  const energyRange = document.getElementById("r-pe-main");
   if (energyRange) {
     energyRange.value = String(energyToSliderPosition(energy));
     paintSliderTrack(
       energyRange,
-      (Number(energyRange.value) / Number(energyRange.max || 1000)) * 100
+      (Number(energyRange.value) / Number(energyRange.max || 1000)) * 100,
     );
   }
 
-  const widthModal = document.getElementById('i-Vw');
+  const widthModal = document.getElementById("i-Vw");
   if (widthModal) widthModal.value = width.toFixed(1);
-  const energyModal = document.getElementById('i-Eev');
+  const energyModal = document.getElementById("i-Eev");
   if (energyModal) energyModal.value = energy.toFixed(4);
 }
 
 const ENERGY_MIN = 0.001;
 const ENERGY_MAX = 50.0;
 const ENERGY_SLIDER_MAX = 1000;
-const DRAWER_STORAGE_KEY = 'qt-info-drawer-open';
+const DRAWER_STORAGE_KEY = "qt-info-drawer-open";
 
 function clampValue(value, min, max, fallback) {
   if (!Number.isFinite(value)) return fallback;
@@ -134,14 +137,19 @@ function parseControlValue(value) {
 }
 
 function paintSliderTrack(rangeEl, percent) {
-  const track = rangeEl?.closest('.speed-range');
+  const track = rangeEl?.closest(".speed-range");
   if (!track) return;
   const clampedPercent = Math.max(0, Math.min(100, percent));
   track.style.background = `linear-gradient(to right, var(--quick-slider-fill) 0%, var(--quick-slider-fill) ${clampedPercent}%, var(--quick-slider-track) ${clampedPercent}%, var(--quick-slider-track) 100%)`;
 }
 
 function energyToSliderPosition(energy) {
-  const clamped = clampValue(Number(energy), ENERGY_MIN, ENERGY_MAX, ENERGY_MIN);
+  const clamped = clampValue(
+    Number(energy),
+    ENERGY_MIN,
+    ENERGY_MAX,
+    ENERGY_MIN,
+  );
   const logMin = Math.log10(ENERGY_MIN);
   const logMax = Math.log10(ENERGY_MAX);
   const ratio = (Math.log10(clamped) - logMin) / (logMax - logMin);
@@ -157,13 +165,17 @@ function sliderPositionToEnergy(position) {
 }
 
 function initSpeedSlider() {
-  const controls = Array.from(document.querySelectorAll('.speed-slider-control'));
+  const controls = Array.from(
+    document.querySelectorAll(".speed-slider-control"),
+  );
   if (!controls.length) return;
 
   const renderControl = (control, currentSpeed) => {
     const range = control.querySelector('input[type="range"]');
-    const rangeWrap = control.querySelector('.speed-range');
-    const labels = Array.from(control.querySelectorAll('.speed-range-labels li'));
+    const rangeWrap = control.querySelector(".speed-range");
+    const labels = Array.from(
+      control.querySelectorAll(".speed-range-labels li"),
+    );
     if (!range || !rangeWrap) return;
 
     const min = Number(range.min);
@@ -174,9 +186,9 @@ function initSpeedSlider() {
 
     labels.forEach((labelEl) => {
       const labelSpeed = Number(labelEl.dataset.speed);
-      labelEl.classList.remove('active', 'selected');
-      if (labelSpeed <= currentSpeed) labelEl.classList.add('selected');
-      if (labelSpeed === currentSpeed) labelEl.classList.add('active');
+      labelEl.classList.remove("active", "selected");
+      if (labelSpeed <= currentSpeed) labelEl.classList.add("selected");
+      if (labelSpeed === currentSpeed) labelEl.classList.add("active");
     });
   };
 
@@ -187,16 +199,18 @@ function initSpeedSlider() {
 
   controls.forEach((control) => {
     const range = control.querySelector('input[type="range"]');
-    const labels = Array.from(control.querySelectorAll('.speed-range-labels li'));
+    const labels = Array.from(
+      control.querySelectorAll(".speed-range-labels li"),
+    );
     if (!range) return;
 
-    range.addEventListener('input', () => {
+    range.addEventListener("input", () => {
       setSimulationSpeed(Number(range.value));
       renderAll();
     });
 
     labels.forEach((labelEl) => {
-      labelEl.addEventListener('click', () => {
+      labelEl.addEventListener("click", () => {
         const speed = Number(labelEl.dataset.speed);
         setSimulationSpeed(speed);
         renderAll();
@@ -208,14 +222,14 @@ function initSpeedSlider() {
 }
 
 function initQuickParameterControls() {
-  const widthInput = document.getElementById('i-bw-main');
-  const widthRange = document.getElementById('r-bw-main');
-  const energyInput = document.getElementById('i-pe-main');
-  const energyRange = document.getElementById('r-pe-main');
+  const widthInput = document.getElementById("i-bw-main");
+  const widthRange = document.getElementById("r-bw-main");
+  const energyInput = document.getElementById("i-pe-main");
+  const energyRange = document.getElementById("r-pe-main");
 
   const applyWidthValue = (value) => {
     const nextWidth = setBarrierWidthNm(
-      clampValue(parseControlValue(value), 0.1, 60, getBarrierWidthNm())
+      clampValue(parseControlValue(value), 0.1, 60, getBarrierWidthNm()),
     );
     if (widthInput) widthInput.value = nextWidth.toFixed(1);
     updateQuickParameterDisplays();
@@ -223,60 +237,75 @@ function initQuickParameterControls() {
 
   const applyEnergyValue = (value) => {
     const nextEnergy = setParticleEnergyEv(
-      clampValue(parseControlValue(value), ENERGY_MIN, ENERGY_MAX, getParticleEnergyEv())
+      clampValue(
+        parseControlValue(value),
+        ENERGY_MIN,
+        ENERGY_MAX,
+        getParticleEnergyEv(),
+      ),
     );
     if (energyInput) energyInput.value = nextEnergy.toFixed(4);
     updateQuickParameterDisplays();
   };
 
   if (widthRange) {
-    widthRange.addEventListener('input', () => applyWidthValue(widthRange.value));
+    widthRange.addEventListener("input", () =>
+      applyWidthValue(widthRange.value),
+    );
   }
   if (widthInput) {
-    widthInput.addEventListener('change', () => applyWidthValue(widthInput.value));
-    widthInput.addEventListener('blur', () => applyWidthValue(widthInput.value));
+    widthInput.addEventListener("change", () =>
+      applyWidthValue(widthInput.value),
+    );
+    widthInput.addEventListener("blur", () =>
+      applyWidthValue(widthInput.value),
+    );
   }
 
   if (energyRange) {
-    energyRange.addEventListener('input', () =>
-      applyEnergyValue(sliderPositionToEnergy(energyRange.value))
+    energyRange.addEventListener("input", () =>
+      applyEnergyValue(sliderPositionToEnergy(energyRange.value)),
     );
   }
   if (energyInput) {
-    energyInput.addEventListener('change', () => applyEnergyValue(energyInput.value));
-    energyInput.addEventListener('blur', () => applyEnergyValue(energyInput.value));
+    energyInput.addEventListener("change", () =>
+      applyEnergyValue(energyInput.value),
+    );
+    energyInput.addEventListener("blur", () =>
+      applyEnergyValue(energyInput.value),
+    );
   }
 }
 
 function setDrawerOpen(isOpen) {
-  const drawer = document.getElementById('info-drawer');
-  const toggle = document.getElementById('btn-drawer-toggle');
+  const drawer = document.getElementById("info-drawer");
+  const toggle = document.getElementById("btn-drawer-toggle");
   if (!drawer || !toggle) return;
-  drawer.classList.toggle('open', isOpen);
-  toggle.setAttribute('aria-expanded', String(isOpen));
-  toggle.querySelector('.drawer-toggle-icon').textContent = isOpen ? '‹' : '›';
+  drawer.classList.toggle("open", isOpen);
+  toggle.setAttribute("aria-expanded", String(isOpen));
+  toggle.querySelector(".drawer-toggle-icon").textContent = isOpen ? "‹" : "›";
   try {
-    window.localStorage.setItem(DRAWER_STORAGE_KEY, isOpen ? '1' : '0');
+    window.localStorage.setItem(DRAWER_STORAGE_KEY, isOpen ? "1" : "0");
   } catch {
     // Ignore storage failures; the drawer still works without persistence.
   }
 }
 
 function initDrawerToggle() {
-  const drawer = document.getElementById('info-drawer');
-  const toggle = document.getElementById('btn-drawer-toggle');
+  const drawer = document.getElementById("info-drawer");
+  const toggle = document.getElementById("btn-drawer-toggle");
   if (!drawer || !toggle) return;
 
   let isOpen = false;
   try {
-    isOpen = window.localStorage.getItem(DRAWER_STORAGE_KEY) === '1';
+    isOpen = window.localStorage.getItem(DRAWER_STORAGE_KEY) === "1";
   } catch {
     // Ignore storage failures and keep default closed state.
   }
 
   setDrawerOpen(isOpen);
-  toggle.addEventListener('click', () => {
-    const nextState = !drawer.classList.contains('open');
+  toggle.addEventListener("click", () => {
+    const nextState = !drawer.classList.contains("open");
     setDrawerOpen(nextState);
   });
 }
@@ -285,16 +314,16 @@ function initDrawerToggle() {
 (async function initUI() {
   // Load components first
   try {
-    const headerRes = await fetch('components/header.html');
+    const headerRes = await fetch("components/header.html");
     if (headerRes.ok)
-      document.getElementById('header-container').innerHTML =
+      document.getElementById("header-container").innerHTML =
         await headerRes.text();
-    const footerRes = await fetch('components/footer.html');
+    const footerRes = await fetch("components/footer.html");
     if (footerRes.ok)
-      document.getElementById('footer-container').innerHTML =
+      document.getElementById("footer-container").innerHTML =
         await footerRes.text();
   } catch (err) {
-    console.error('Failed to load components', err);
+    console.error("Failed to load components", err);
   }
 
   // Initialise simulation core
@@ -308,28 +337,28 @@ function initDrawerToggle() {
 
   // Navigation buttons
   document
-    .getElementById('btn-info')
-    .addEventListener('click', () => showPanel('info'));
+    .getElementById("btn-info")
+    .addEventListener("click", () => showPanel("info"));
   document
-    .getElementById('btn-equation')
-    .addEventListener('click', () => showPanel('equation'));
+    .getElementById("btn-equation")
+    .addEventListener("click", () => showPanel("equation"));
   document
-    .getElementById('btn-working')
-    .addEventListener('click', () => showPanel('working'));
+    .getElementById("btn-working")
+    .addEventListener("click", () => showPanel("working"));
 
   // Simulator control
-  document.getElementById('btn-simulator').addEventListener('click', () => {
+  document.getElementById("btn-simulator").addEventListener("click", () => {
     setRunning(true);
     showSim();
   });
-  document.getElementById('btn-stop').addEventListener('click', stopSim);
+  document.getElementById("btn-stop").addEventListener("click", stopSim);
 
   // Height control (direct update)
-  document.getElementById('btn-open-height').addEventListener('click', () => {
+  document.getElementById("btn-open-height").addEventListener("click", () => {
     const currentPotential = getBarrierPotential();
     const entry = window.prompt(
-      'Enter barrier potential V₀ in eV (0.10 to 10.00):',
-      currentPotential.toFixed(2)
+      "Enter barrier potential V₀ in eV (0.10 to 10.00):",
+      currentPotential.toFixed(2),
     );
     if (entry === null) return;
     const nextPotential = setBarrierPotential(entry);
@@ -339,122 +368,127 @@ function initDrawerToggle() {
   });
 
   // Viewport controls
-  const btnZoomIn = document.getElementById('btn-zoom-in');
-  if (btnZoomIn) btnZoomIn.addEventListener('click', zoomIn);
-  const btnZoomOut = document.getElementById('btn-zoom-out');
-  if (btnZoomOut) btnZoomOut.addEventListener('click', zoomOut);
-  const btnZoomReset = document.getElementById('btn-zoom-reset');
-  if (btnZoomReset) btnZoomReset.addEventListener('click', recenter);
+  const btnZoomIn = document.getElementById("btn-zoom-in");
+  if (btnZoomIn) btnZoomIn.addEventListener("click", zoomIn);
+  const btnZoomOut = document.getElementById("btn-zoom-out");
+  if (btnZoomOut) btnZoomOut.addEventListener("click", zoomOut);
+  const btnZoomReset = document.getElementById("btn-zoom-reset");
+  if (btnZoomReset) btnZoomReset.addEventListener("click", recenter);
 
   // Width modal
   document
-    .getElementById('btn-open-width')
-    .addEventListener('click', () => openM('width'));
+    .getElementById("btn-open-width")
+    .addEventListener("click", () => openM("width"));
   document
-    .getElementById('btn-close-width')
-    .addEventListener('click', () => closeM('width'));
+    .getElementById("btn-close-width")
+    .addEventListener("click", () => closeM("width"));
   document
-    .getElementById('btn-cancel-width')
-    .addEventListener('click', () => closeM('width'));
-  document.getElementById('btn-apply-width').addEventListener('click', () => {
+    .getElementById("btn-cancel-width")
+    .addEventListener("click", () => closeM("width"));
+  document.getElementById("btn-apply-width").addEventListener("click", () => {
     applyWidth();
     updateQuickParameterDisplays();
-    closeM('width');
+    closeM("width");
   });
 
   // Mode modal
+  document.getElementById("btn-open-mode").addEventListener("click", () => {
+    syncModeModalFields();
+    openM("mode");
+  });
   document
-    .getElementById('btn-open-mode')
-    .addEventListener('click', () => {
-      syncModeModalFields();
-      openM('mode');
-    });
+    .getElementById("btn-close-mode")
+    .addEventListener("click", () => closeM("mode"));
   document
-    .getElementById('btn-close-mode')
-    .addEventListener('click', () => closeM('mode'));
-  document
-    .getElementById('btn-cancel-mode')
-    .addEventListener('click', () => closeM('mode'));
-  document.getElementById('btn-apply-mode').addEventListener('click', () => {
+    .getElementById("btn-cancel-mode")
+    .addEventListener("click", () => closeM("mode"));
+  document.getElementById("btn-apply-mode").addEventListener("click", () => {
     applyMode();
-    closeM('mode');
+    closeM("mode");
   });
 
   // Reset button
-  document.getElementById('btn-reset').addEventListener('click', () => {
+  document.getElementById("btn-reset").addEventListener("click", () => {
     resetSim();
     updateQuickParameterDisplays();
     syncModeModalFields();
   });
 
   // Toast close
-  document.getElementById('btn-close-toast').addEventListener('click', () => {
-    const toast = document.getElementById('height-toast');
-    toast.classList.remove('show');
+  document.getElementById("btn-close-toast").addEventListener("click", () => {
+    const toast = document.getElementById("height-toast");
+    toast.classList.remove("show");
     if (window.toastTimer) {
       clearTimeout(window.toastTimer);
       window.toastTimer = null;
     }
   });
-
 })();
 
 export function showPanel(id) {
   document
-    .querySelectorAll('.panel')
-    .forEach((e) => e.classList.remove('active'));
+    .querySelectorAll(".panel")
+    .forEach((e) => e.classList.remove("active"));
   document
-    .querySelectorAll('.nav-item')
-    .forEach((e) => e.classList.remove('active'));
-  document.getElementById('panel-' + id).classList.add('active');
-  const items = document.querySelectorAll('.nav-item');
+    .querySelectorAll(".nav-item")
+    .forEach((e) => e.classList.remove("active"));
+  document.getElementById("panel-" + id).classList.add("active");
+  const items = document.querySelectorAll(".nav-item");
   const idx = { info: 0, equation: 1, working: 2 }[id];
-  if (items[idx]) items[idx].classList.add('active');
+  if (items[idx]) items[idx].classList.add("active");
 }
 export function showSim() {
   document
-    .querySelectorAll('.panel')
-    .forEach((e) => e.classList.remove('active'));
+    .querySelectorAll(".panel")
+    .forEach((e) => e.classList.remove("active"));
   document
-    .querySelectorAll('.nav-item')
-    .forEach((e) => e.classList.remove('active'));
+    .querySelectorAll(".nav-item")
+    .forEach((e) => e.classList.remove("active"));
 }
 export function openM(id) {
-  document.getElementById('m-' + id).classList.add('open');
+  document.getElementById("m-" + id).classList.add("open");
 }
 export function closeM(id) {
-  document.getElementById('m-' + id).classList.remove('open');
+  document.getElementById("m-" + id).classList.remove("open");
 }
 
-function sanitizeNumberInput(id, min, max, fallback, decimals = null, integer = false) {
+function sanitizeNumberInput(
+  id,
+  min,
+  max,
+  fallback,
+  decimals = null,
+  integer = false,
+) {
   const el = document.getElementById(id);
   if (!el) return;
   const raw = Number(el.value);
   let nextValue = Number.isFinite(raw) ? raw : fallback;
   nextValue = Math.max(min, Math.min(max, nextValue));
   if (integer) nextValue = Math.round(nextValue);
-  el.value = decimals === null ? String(nextValue) : nextValue.toFixed(decimals);
+  el.value =
+    decimals === null ? String(nextValue) : nextValue.toFixed(decimals);
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener("DOMContentLoaded", () => {
   const numberConfig = [
-    { id: 'i-Vw', min: 0.1, max: 60, fallback: 20, decimals: 1 },
-    { id: 'i-Eev', min: 0.001, max: 50.0, fallback: 0.0549, decimals: 4 },
-    { id: 'i-sig', min: 2, max: 14, fallback: 5, decimals: 1 },
+    { id: "i-Vw", min: 0.1, max: 60, fallback: 20, decimals: 1 },
+    { id: "i-Eev", min: 0.001, max: 50.0, fallback: 0.0549, decimals: 4 },
+    { id: "i-sig", min: 2, max: 14, fallback: 5, decimals: 1 },
   ];
 
   numberConfig.forEach((cfg) => {
     const el = document.getElementById(cfg.id);
     if (!el) return;
-    el.addEventListener('blur', () =>
+    el.addEventListener("blur", () =>
       sanitizeNumberInput(
         cfg.id,
         cfg.min,
         cfg.max,
         cfg.fallback,
         cfg.decimals ?? null,
-        cfg.integer ?? false
-      )
+        cfg.integer ?? false,
+      ),
     );
   });
 });

@@ -1,6 +1,6 @@
 {
   "name": "quantum-tunneling-simulator",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Quantum Tunneling Effect Simulator",
   "scripts": {
     "format": "prettier --write .",

@@ -11,11 +11,11 @@ It is written to match the current code behavior (not a “textbook idealization
 ## High-level flow
 
 - **Startup** (`js/utils/ui.js`)
-  - Loads header/footer HTML *when available*.
+  - Loads header/footer HTML _when available_.
   - Calls `initSimulation()` to build the numerical model and canvas.
   - Starts the animation loop via `loop()` (runs every `requestAnimationFrame`).
 - **Per animation frame** (`loop()` in `js/utils/simulation.js`)
-  - If the simulator is *running* and in *time-dependent mode*:
+  - If the simulator is _running_ and in _time-dependent mode_:
     - Advances the quantum state by `stepsPerFrame` discrete solver steps.
   - Calls `draw()` to render the current state on the canvas.
 
@@ -68,7 +68,7 @@ When the user changes height/width/type, the code rebuilds `V_` and recomputes s
 
 `initPsi()` constructs a normalized Gaussian wavepacket:
 
-- Center: `x0_ = -100`
+- Center: `x0_` is initialized a safe distance inside the domain for one-shot packets
 - Spread: `sigma`
 - Wavenumber: `k0` (sets momentum and energy)
 

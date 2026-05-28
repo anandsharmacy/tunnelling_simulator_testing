@@ -1,4 +1,4 @@
-@import url('styles.css?v=20260517-drawer');
+@import url("styles.css?v=20260517-drawer");
 
 /* Component Utility Classes */
 
@@ -82,7 +82,9 @@
   text-decoration: none;
   padding: 6px 10px;
   border-radius: 8px;
-  transition: background 0.18s, color 0.18s;
+  transition:
+    background 0.18s,
+    color 0.18s;
 }
 
 .header-link:hover {
@@ -148,12 +150,14 @@
   inset: 0;
   cursor: pointer;
   border-radius: 999px;
-  transition: background 0.25s ease, box-shadow 0.25s ease;
+  transition:
+    background 0.25s ease,
+    box-shadow 0.25s ease;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
 }
 
 .switch .slider::before {
-  content: '';
+  content: "";
   position: absolute;
   height: 1.3em;
   width: 1.3em;
@@ -162,7 +166,10 @@
   background: var(--thumb);
   border-radius: 50%;
   box-shadow: 0 4px 10px var(--shadow);
-  transition: transform 0.25s ease, width 0.25s ease, height 0.25s ease;
+  transition:
+    transform 0.25s ease,
+    width 0.25s ease,
+    height 0.25s ease;
 }
 
 .switch input:checked + .slider::before {
@@ -205,7 +212,7 @@
   box-shadow: 0 0 0 3px rgba(62, 87, 124, 0.28);
 }
 
-:root[data-theme='dark'] .switch.theme-switch {
+:root[data-theme="dark"] .switch.theme-switch {
   --track-off: #4f647f;
   --track-on: #7f93b6;
 }

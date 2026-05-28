@@ -1,9 +1,9 @@
-const THEME_STORAGE_KEY = 'qp-theme-preference';
+const THEME_STORAGE_KEY = "qp-theme-preference";
 
 function getStoredTheme() {
   try {
     const value = window.localStorage.getItem(THEME_STORAGE_KEY);
-    if (value === 'light' || value === 'dark') return value;
+    if (value === "light" || value === "dark") return value;
   } catch {
     // Ignore storage failures (private mode, blocked storage, etc.)
   }
@@ -11,7 +11,9 @@ function getStoredTheme() {
 }
 
 function getSystemTheme() {
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  return window.matchMedia("(prefers-color-scheme: dark)").matches
+    ? "dark"
+    : "light";
 }
 
 function getResolvedTheme() {
@@ -27,49 +29,51 @@ function persistTheme(theme) {
 }
 
 function applyTheme(theme) {
-  const nextTheme = theme === 'dark' ? 'dark' : 'light';
-  document.documentElement.setAttribute('data-theme', nextTheme);
+  const nextTheme = theme === "dark" ? "dark" : "light";
+  document.documentElement.setAttribute("data-theme", nextTheme);
   document.documentElement.style.colorScheme = nextTheme;
-  window.dispatchEvent(new window.CustomEvent('qp-theme-change', { detail: { theme: nextTheme } }));
+  window.dispatchEvent(
+    new window.CustomEvent("qp-theme-change", { detail: { theme: nextTheme } }),
+  );
   return nextTheme;
 }
 
 function syncToggleState(theme) {
-  const toggle = document.getElementById('themeToggle');
-  if (toggle) toggle.checked = theme === 'dark';
+  const toggle = document.getElementById("themeToggle");
+  if (toggle) toggle.checked = theme === "dark";
 }
 
 function bindThemeToggle() {
-  const toggle = document.getElementById('themeToggle');
-  if (!toggle || toggle.dataset.bound === 'true') return false;
+  const toggle = document.getElementById("themeToggle");
+  if (!toggle || toggle.dataset.bound === "true") return false;
 
-  toggle.addEventListener('change', () => {
-    const nextTheme = applyTheme(toggle.checked ? 'dark' : 'light');
+  toggle.addEventListener("change", () => {
+    const nextTheme = applyTheme(toggle.checked ? "dark" : "light");
     persistTheme(nextTheme);
     syncToggleState(nextTheme);
   });
 
-  const container = toggle.closest('.header-theme');
-  const leftLabel = container?.querySelector('.theme-label.left');
-  const rightLabel = container?.querySelector('.theme-label.right');
+  const container = toggle.closest(".header-theme");
+  const leftLabel = container?.querySelector(".theme-label.left");
+  const rightLabel = container?.querySelector(".theme-label.right");
 
   if (leftLabel) {
-    leftLabel.addEventListener('click', () => {
-      const nextTheme = applyTheme('light');
+    leftLabel.addEventListener("click", () => {
+      const nextTheme = applyTheme("light");
       persistTheme(nextTheme);
       syncToggleState(nextTheme);
     });
   }
 
   if (rightLabel) {
-    rightLabel.addEventListener('click', () => {
-      const nextTheme = applyTheme('dark');
+    rightLabel.addEventListener("click", () => {
+      const nextTheme = applyTheme("dark");
       persistTheme(nextTheme);
       syncToggleState(nextTheme);
     });
   }
 
-  toggle.dataset.bound = 'true';
+  toggle.dataset.bound = "true";
   return true;
 }
 
@@ -80,13 +84,16 @@ function initializeTheme() {
 
 initializeTheme();
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener("DOMContentLoaded", () => {
   if (bindThemeToggle()) return;
 
-  const headerContainer = document.getElementById('header-container') || document.body;
+  const headerContainer =
+    document.getElementById("header-container") || document.body;
   const observer = new window.MutationObserver(() => {
     if (bindThemeToggle()) {
-      syncToggleState(document.documentElement.getAttribute('data-theme') || 'light');
+      syncToggleState(
+        document.documentElement.getAttribute("data-theme") || "light",
+      );
       observer.disconnect();
     }
   });
@@ -98,14 +105,16 @@ document.addEventListener('DOMContentLoaded', () => {
   const retryTimer = window.setInterval(() => {
     attempts += 1;
     if (bindThemeToggle() || attempts >= maxAttempts) {
-      syncToggleState(document.documentElement.getAttribute('data-theme') || 'light');
+      syncToggleState(
+        document.documentElement.getAttribute("data-theme") || "light",
+      );
       window.clearInterval(retryTimer);
       observer.disconnect();
     }
   }, 200);
 
-  const media = window.matchMedia('(prefers-color-scheme: dark)');
-  media.addEventListener('change', () => {
+  const media = window.matchMedia("(prefers-color-scheme: dark)");
+  media.addEventListener("change", () => {
     if (getStoredTheme()) return;
     const nextTheme = applyTheme(getSystemTheme());
     syncToggleState(nextTheme);
