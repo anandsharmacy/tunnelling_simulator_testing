@@ -3,6 +3,7 @@ import {
   applyMode,
   applyWidth,
   buildGrid,
+  getDensity,
   setBarrierPotential,
   setContinuousSourceActive,
   stepSim,
@@ -49,4 +50,16 @@ export function loadScenario({
 
 export function run(n) {
   for (let i = 0; i < n; i++) stepSim();
+}
+
+// Probability-weighted mean position of the whole wavefunction.
+export function centroid() {
+  const { x, p } = getDensity();
+  let sum = 0,
+    weighted = 0;
+  for (let i = 0; i < x.length; i++) {
+    sum += p[i];
+    weighted += x[i] * p[i];
+  }
+  return weighted / sum;
 }
