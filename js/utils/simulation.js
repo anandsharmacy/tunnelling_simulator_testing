@@ -546,6 +546,24 @@ export function getFluxBasedTR() {
   };
 }
 
+export function getScatteringTR() {
+  // Measured relative to the barrier, never from fixed windows:
+  //   T = |ψ|² past the barrier's right edge (or inside a step) + right-edge absorption
+  //   R = left-moving |ψ₋|² left of the barrier + left-edge absorption
+  // so the incoming packet never counts as reflected.
+  const span = getBarrierSpan();
+  if (!span.hasBarrier) return { T: NaN, R: NaN };
+  const tStart =
+    span.rightIndex === Nx - 1 ? span.leftIndex : span.rightIndex + 1;
+  const { negR, negI } = splitDirectionalComponents(psiR, psiI);
+  let t = 0,
+    r = 0;
+  for (let i = tStart; i < Nx; i++) t += psiR[i] * psiR[i] + psiI[i] * psiI[i];
+  for (let i = 0; i < span.leftIndex; i++)
+    r += negR[i] * negR[i] + negI[i] * negI[i];
+  return { T: t * dx + absorbedRightProb, R: r * dx + absorbedLeftProb };
+}
+
 export function draw() {
   if (!canvas || !ctx) return;
 
@@ -752,53 +770,20 @@ export function draw() {
   });
   ctx.restore();
 
-  // Spatial windows for reflection/transmission estimation.
-  // Left of iL -> reflected region, right of iR -> transmitted region.
-  const iL = Math.max(
-    0,
-    Math.min(Nx - 1, Math.floor(((-50 - x_min) / (x_max - x_min)) * Nx))
-  );
-  const iR = Math.max(
-    0,
-    Math.min(Nx - 1, Math.floor(((50 - x_min) / (x_max - x_min)) * Nx))
-  );
-  // Integrate by Riemann sum (sum * dx).
-  let pL = 0,
-    pRr = 0,
-    pT = 0;
-  for (let i = 0; i < Nx; i++) {
-    if (i < iL) pL += prob[i];
-    if (i > iR) pRr += prob[i];
-    pT += prob[i];
-  }
-  pL *= dx;
-  pRr *= dx;
+  let pT = 0;
+  for (let i = 0; i < Nx; i++) pT += prob[i];
   pT *= dx;
-  
-  // Determine T/R to display: flux-based if continuous mode active, else region-integral
-  let displayR, displayT;
-  if (continuousSourceActive) {
-    const fluxTR = getFluxBasedTR();
-    if (Number.isFinite(fluxTR.T) && Number.isFinite(fluxTR.R)) {
-      displayR = fluxTR.R;
-      displayT = fluxTR.T;
-    } else {
-      // Fallback during ramp-in
-      displayR = 0;
-      displayT = 0;
-    }
-  } else {
-    // Original region-integral approach
-    displayR = Math.min(1, pL + absorbedLeftProb);
-    displayT = Math.min(1, pRr + absorbedRightProb);
-  }
-  
+
+  // NaN (shown as "—") when T/R is undefined, e.g. no barrier.
+  const { T: displayT, R: displayR } = getScatteringTR();
+  const fmtTR = (v) => (Number.isFinite(v) ? v.toFixed(4) : '—');
+
   const sT = document.getElementById('sT');
   const sR = document.getElementById('sR');
   const sN = document.getElementById('sN');
   const sE = document.getElementById('sE');
-  if (sT) sT.textContent = displayT.toFixed(4);
-  if (sR) sR.textContent = displayR.toFixed(4);
+  if (sT) sT.textContent = fmtTR(displayT);
+  if (sR) sR.textContent = fmtTR(displayR);
   if (sN) sN.textContent = pT.toFixed(4);
   if (sE) sE.textContent = ((k0 * k0) / 2).toFixed(3);
   const tr = displayR + displayT;

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   getAbsorbedProbability,
   getBarrierWidthNm,
+  getScatteringTR,
   getViewportBounds,
   getWaveNorm,
   NM_PER_UNIT,
@@ -79,5 +80,42 @@ describe('absorbing boundaries', () => {
       expect(n).toBeLessThanOrEqual(prev + 1e-12); // old code: rose to 1.0016
       prev = n;
     }
+  });
+});
+
+describe('scattering readout', () => {
+  it('reports no reflection before the packet reaches the barrier', () => {
+    loadScenario();
+    run(1000); // t = 50
+    const { T, R } = getScatteringTR();
+    expect(R).toBeLessThan(1e-4); // old readout: 1.0000
+    expect(T).toBeLessThan(1e-6);
+  });
+
+  it('keeps T + R <= 1 throughout and reaches ~1 after scattering', () => {
+    loadScenario();
+    for (let k = 0; k < 30; k++) {
+      run(200);
+      const { T, R } = getScatteringTR();
+      expect(T + R).toBeLessThanOrEqual(1.001);
+    }
+    const { T, R } = getScatteringTR();
+    expect(T + R).toBeGreaterThan(0.998);
+  });
+
+  it('no barrier gives NaN', () => {
+    loadScenario({ pot: 'none' });
+    run(10);
+    expect(getScatteringTR().T).toBeNaN();
+  });
+
+  it('step potential counts the step region as transmitted', () => {
+    loadScenario({ pot: 'step', v0: 0.5 });
+    run(6000);
+    const { T } = getScatteringTR();
+    // Step transmission 4·k1·k2/(k1+k2)² averaged over the packet = 0.872.
+    // Counting only past the step's far end would give ~0 here.
+    expect(T).toBeGreaterThan(0.83);
+    expect(T).toBeLessThan(0.9);
   });
 });
