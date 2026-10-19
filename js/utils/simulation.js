@@ -40,6 +40,7 @@ let fftWorkspace = null;
 // getEmitIntervalSteps() steps, all launched from the same centre x0_.
 let continuousSourceActive = false;
 let emittedPackets = 0; // probability put into the box (each packet has norm 1)
+let emittedLeftShare = 0; // part of that already moving left (away from the barrier)
 let nextEmitStep = 0;
 
 const WAVE_COLORS = {
@@ -180,11 +181,23 @@ function addPacket(center) {
     sum += Math.exp((-d * d) / (2 * sigma * sigma));
   }
   const amp = 1 / Math.sqrt(sum * dx);
+  const pr = new Float64Array(Nx),
+    pi = new Float64Array(Nx);
   for (let i = 0; i < Nx; i++) {
     const d = x_[i] - center;
     const e = amp * Math.exp((-d * d) / (4 * sigma * sigma));
-    psiR[i] += e * Math.cos(k0 * d);
-    psiI[i] += e * Math.sin(k0 * d);
+    pr[i] = e * Math.cos(k0 * d);
+    pi[i] = e * Math.sin(k0 * d);
+  }
+  // At low k0·σ a Gaussian really contains k < 0 parts that move away from
+  // the barrier from t = 0. Record that share so it never counts as reflection.
+  const { negR, negI } = splitDirectionalComponents(pr, pi);
+  let share = 0;
+  for (let i = 0; i < Nx; i++) share += negR[i] * negR[i] + negI[i] * negI[i];
+  emittedLeftShare += share * dx;
+  for (let i = 0; i < Nx; i++) {
+    psiR[i] += pr[i];
+    psiI[i] += pi[i];
   }
 }
 
@@ -426,6 +439,7 @@ function clearPsi() {
   else psiI.fill(0);
   absorbedLeftProb = 0;
   absorbedRightProb = 0;
+  emittedLeftShare = 0;
 }
 
 function getDefaultPacketCenter() {
@@ -505,10 +519,16 @@ export function getScatteringTR() {
   for (let i = tStart; i < Nx; i++) t += psiR[i] * psiR[i] + psiI[i] * psiI[i];
   for (let i = 0; i < span.leftIndex; i++)
     r += negR[i] * negR[i] + negI[i] * negI[i];
+  // Both are fractions of the probability that actually headed for the
+  // barrier: the packets' own left-moving share is taken out of r and of the
+  // total (it is ~0 for k0·σ ≳ 2, e.g. the defaults).
+  const incident = emittedPackets - emittedLeftShare;
+  if (!(incident > 1e-9)) return { T: NaN, R: NaN };
   t = t * dx + absorbedRightProb;
-  r = r * dx + absorbedLeftProb;
-  if (!continuousSourceActive) return { T: t, R: r };
-  if (t + r < 0.5) return { T: NaN, R: NaN };
+  r = Math.max(0, r * dx + absorbedLeftProb - emittedLeftShare);
+  if (!continuousSourceActive) return { T: t / incident, R: r / incident };
+  const perPacket = incident / emittedPackets;
+  if (t + r < 0.5 * perPacket) return { T: NaN, R: NaN };
   return { T: t / (t + r), R: r / (t + r) };
 }
 
@@ -947,7 +967,10 @@ export function setContinuousSourceActive(value) {
 }
 
 export function autoZoomBarrier() {
-  const range = Math.max(24, Math.min(320, Vw_ * 80));
+  // Fit the barrier, but never so tightly that the packet's start (where
+  // the single packet and every train packet begin) leaves the view.
+  const packetReach = 2 * (Math.abs(getDefaultPacketCenter()) + 3 * sigma);
+  const range = Math.min(320, Math.max(Vw_ * 80, packetReach));
   view_x_min = -range / 2;
   view_x_max = range / 2;
 }

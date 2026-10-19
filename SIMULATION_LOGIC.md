@@ -234,6 +234,9 @@ Resizing is triggered via:
 - **Single packet:** T = t and R = r, i.e. "so far". Both read 0 until the packet reaches the barrier, then grow to their final values. At the defaults the final values are T ≈ 0.052 and R ≈ 0.948, against an exact value of 0.0536 averaged over the packet's momentum spread.
 - **Packet train:** the steady-state split T = t/(t+r) and R = r/(t+r). It shows "—" until at least half a packet has resolved.
 - No barrier (`pot_type = 'none'`): T and R are undefined and show "—".
+- Low energy: when k₀σ is small, a Gaussian really contains k < 0 parts that move away from the barrier from t = 0. `addPacket()` measures that share once (`emittedLeftShare`) and `getScatteringTR()` takes it out of r and out of the total. T and R are therefore fractions of the probability that actually headed for the barrier. At the defaults the share is about 0.
+
+The auto-zoom applied on parameter changes never narrows the view below 2·(|x₀| + 3σ), so the start point of the packet, and of every train packet, stays visible.
 
 Numerical Mode, for the same electron (0.72 eV, 1 eV, 0.8 nm), gives the plane-wave value T = 0.0415 at exactly E = 0.72 eV. The simulator's packet value is higher because the packet carries a spread of energies, and its higher-energy part tunnels more easily.
 

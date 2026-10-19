@@ -112,6 +112,12 @@ describe('Packet train', () => {
     expect(getEmittedPackets()).toBe(1);
   });
 
+  it('low-energy train shows no T/R before any packet reaches the barrier', () => {
+    loadScenario({ continuous: true, energyEv: '0.001' });
+    run(30000); // 2 packets out; the first reaches the barrier near step 53700
+    expect(getScatteringTR().R).toBeNaN(); // was 1.0000
+  });
+
   it('low-energy emission interval is finite', () => {
     loadScenario({ continuous: true, energyEv: '0.001' });
     expect(getEmitIntervalSteps()).toBeLessThanOrEqual(24000);

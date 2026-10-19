@@ -120,7 +120,8 @@
             <h3>Transmission &amp; Reflection</h3>
             <div class="eq">
               <span class="eq-lbl">Probabilities</span>T = ∫_{x&gt;x_R} |ψ|² dx
-              &nbsp;|&nbsp; R = ∫_{x&lt;x_L} |ψ|² dx
+              &nbsp;|&nbsp; R = ∫_{x&lt;x_L} |ψ₋|² dx &nbsp;(x_L, x_R = barrier
+              edges; ψ₋ = left-moving part; plus what the edges absorbed)
             </div>
             <h3>WKB Estimate (rectangular barrier)</h3>
             <div class="eq">
@@ -134,16 +135,19 @@
             <h2>How the Simulator Works</h2>
             <ol class="steps">
               <li>
-                <strong>Grid init:</strong> N = 700 uniform points over x ∈
-                [−160, 160], ℏ = m = 1.
+                <strong>Grid init:</strong> N = 1399 uniform points over x ∈
+                [−160, 160] in units with ℏ = m = 1 (shown for an electron:
+                1 unit = 0.276 nm, energies in eV).
               </li>
               <li>
-                <strong>Potential V(x):</strong> Chosen barrier profile
-                evaluated on the grid.
+                <strong>Potential V(x):</strong> Chosen barrier profile,
+                averaged over each grid cell so its width is exact.
               </li>
               <li>
                 <strong>Wavepacket:</strong> Normalised Gaussian ψ(x,0) with
-                momentum k₀ and spread σ, placed at x₀ = −100.
+                momentum k₀ and spread σ, placed at x₀ = −120 (−33 nm). With
+                the continuous source on, a fresh copy is added there at
+                regular intervals.
               </li>
               <li>
                 <strong>Hamiltonian:</strong> Kinetic energy via central
@@ -155,8 +159,9 @@
               </li>
               <li>
                 <strong>Time loop:</strong> (1) RHS = B·ψⁿ, (2) solve A·ψⁿ⁺¹ =
-                RHS via Thomas O(N), (3) absorb outgoing waves near ±160, (4)
-                clamp only tiny numerical norm growth.
+                RHS via Thomas O(N), (3) absorb outgoing waves in damping
+                bands near ±160. No renormalisation: the norm only falls as
+                probability leaves through the edges.
               </li>
               <li>
                 <strong>Rendering:</strong> Scattering components (incident,
@@ -164,8 +169,11 @@
                 overlay.
               </li>
               <li>
-                <strong>Readouts:</strong> T and R computed by integrating |ψ|²
-                over right/left domains in real time.
+                <strong>Readouts:</strong> T = probability past the barrier,
+                R = left-moving probability before it (each plus what the
+                edges absorbed), so the incoming packet never counts as
+                reflected. With the continuous source on, they show the
+                steady-state split.
               </li>
             </ol>
           </article>

@@ -104,6 +104,17 @@ describe('scattering readout', () => {
     expect(T + R).toBeGreaterThan(0.998);
   });
 
+  it("does not count a low-energy packet's own left-moving part as reflection", () => {
+    loadScenario({ energyEv: '0.01' }); // k0·σ ≈ 0.7: ~6% of the packet moves left from t = 0
+    run(1);
+    expect(getScatteringTR().R).toBeLessThan(1e-3); // was 0.063
+  });
+
+  it('keeps the packet start in view after parameter changes', () => {
+    loadScenario(); // setters auto-zoom on the 0.8 nm barrier
+    expect(getViewportBounds().min).toBeLessThanOrEqual(x0_ - 3 * sigma); // was -115.9
+  });
+
   it('no barrier gives NaN', () => {
     loadScenario({ pot: 'none' });
     run(10);

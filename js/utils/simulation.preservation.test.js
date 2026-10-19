@@ -66,3 +66,15 @@ describe("5.3 X-axis tick step is fixed in nm, independent of the yTS logic", ()
     expect(source).toContain("const X_TICK_NM = 10");
   });
 });
+
+describe("In-app 'How the Simulator Works' panel matches the engine", () => {
+  it("states the current grid, start point and readout, not the old ones", () => {
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = dirname(__filename);
+    const html = readFileSync(join(__dirname, "..", "..", "index.html"), "utf8");
+    expect(html).toContain("N = 1399");
+    expect(html).not.toContain("N = 700");
+    expect(html).not.toContain("x₀ = −100");
+    expect(html).not.toContain("clamp only tiny numerical norm growth");
+  });
+});
