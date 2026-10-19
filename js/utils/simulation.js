@@ -9,14 +9,18 @@ let cssW = 0,
 let resizeObserver = null;
 // Internal simulation units:
 // hbar = 1 and m = 1 simplify TDSE updates and keep arithmetic stable.
+// For an electron with energies in eV, one length unit is hbar/sqrt(m_e·eV)
+// and one time unit is hbar/eV. Convert only at the UI boundary.
+export const NM_PER_UNIT = 0.27605,
+  FS_PER_UNIT = 0.65821;
 const hbar = 1,
   m_ = 1,
-  SOURCE_ORIGIN = -160,
-  x_min = SOURCE_ORIGIN,
+  x_min = -160,
   x_max = 160;
 let view_x_min = x_min,
   view_x_max = x_max;
-const Nx = 700,
+// dx = 320/1398 ≈ 0.229 (≈ 23 points per wavelength at the default k0 = 1.2).
+const Nx = 1399,
   dt = 0.05;
 let step = 0,
   running = true,
@@ -24,22 +28,20 @@ let step = 0,
   timeDependent = true;
 export let k0 = 1.2,
   sigma = 5.0,
-  x0_ = SOURCE_ORIGIN,
+  x0_ = -120,
   pot_type = 'single',
   V0_ = 1.0,
-  Vw_ = 20;
+  Vw_ = 0.8 / NM_PER_UNIT;
 let dx, x_, psiR, psiI, V_;
 let A_dR, A_dI, B_dR, B_dI, A_oI, B_oI, cpR, cpI, rhsR, rhsI;
 let fftWorkspace = null;
 
-// Continuous source injection from x = x_min (shared origin)
+// Continuous source: a train of copies of the default packet, one every
+// getEmitIntervalSteps() steps, all launched from the same centre x0_.
 let continuousSourceActive = false;
-let sourceAmplitude = 0.3;
-const sourceRampSteps = 200; // Ramp-in period to avoid startup spikes
-let sourceRampStep = 0; // Current ramp counter
-let leftFluxAccum = 0; // Accumulated leftward flux (reflection)
-let rightFluxAccum = 0; // Accumulated rightward flux (transmission)
-let fluxMeasureCount = 0; // Count of flux measurements for averaging
+let emittedPackets = 0; // probability put into the box (each packet has norm 1)
+let emittedLeftShare = 0; // part of that already moving left (away from the barrier)
+let nextEmitStep = 0;
 
 const WAVE_COLORS = {
   potential: '#7c9ec5',
@@ -49,8 +51,11 @@ const WAVE_COLORS = {
   probability: '#a263ea',
 };
 
+// Edge bands that damp ψ itself: probability only ever leaves the box, and
+// the lost amount is booked to the side it left from.
 const ABSORBER_WIDTH = 24;
-const ABSORBER_STRENGTH = 0.45;
+const ABSORBER_GAMMA = 1.5; // damping rate at the outer wall, per time unit
+let absorberMask;
 
 let absorbedLeftProb = 0;
 let absorbedRightProb = 0;
@@ -77,7 +82,27 @@ export function buildGrid() {
   // Uniform spatial grid x[i] over [x_min, x_max].
   dx = (x_max - x_min) / (Nx - 1);
   x_ = new Float64Array(Nx);
-  for (let i = 0; i < Nx; i++) x_[i] = x_min + i * dx;
+  absorberMask = new Float64Array(Nx);
+  for (let i = 0; i < Nx; i++) {
+    x_[i] = x_min + i * dx;
+    // Depth fraction into the nearest edge band: 0 at its inner edge, 1 at the wall.
+    const depth = Math.max(
+      0,
+      (x_min + ABSORBER_WIDTH - x_[i]) / ABSORBER_WIDTH,
+      (x_[i] - (x_max - ABSORBER_WIDTH)) / ABSORBER_WIDTH
+    );
+    absorberMask[i] = Math.exp(-ABSORBER_GAMMA * dt * depth * depth);
+  }
+  absorberMask[0] = absorberMask[Nx - 1] = 0; // Dirichlet walls
+}
+
+function cellOverlap(xi, a, b) {
+  // Fraction of the grid cell [xi - dx/2, xi + dx/2] that lies inside [a, b].
+  // Averaging V over each cell keeps the barrier's width exact instead of
+  // snapping its edges to whole cells.
+  return (
+    Math.max(0, Math.min(xi + dx / 2, b) - Math.max(xi - dx / 2, a)) / dx
+  );
 }
 
 export function buildV() {
@@ -85,15 +110,18 @@ export function buildV() {
   V_ = new Float64Array(Nx);
   if (pot_type === 'none') return;
   if (pot_type === 'single') {
-    for (let i = 0; i < Nx; i++) if (Math.abs(x_[i]) < Vw_ / 2) V_[i] = V0_;
+    for (let i = 0; i < Nx; i++)
+      V_[i] = V0_ * cellOverlap(x_[i], -Vw_ / 2, Vw_ / 2);
   } else if (pot_type === 'double') {
     const g = 30,
       w = Math.min(Vw_, 14);
     for (let i = 0; i < Nx; i++)
-      if (Math.abs(x_[i] + g / 2) < w / 2 || Math.abs(x_[i] - g / 2) < w / 2)
-        V_[i] = V0_;
+      V_[i] =
+        V0_ *
+        (cellOverlap(x_[i], -g / 2 - w / 2, -g / 2 + w / 2) +
+          cellOverlap(x_[i], g / 2 - w / 2, g / 2 + w / 2));
   } else if (pot_type === 'step') {
-    for (let i = 0; i < Nx; i++) if (x_[i] > 0) V_[i] = V0_;
+    for (let i = 0; i < Nx; i++) V_[i] = V0_ * cellOverlap(x_[i], 0, Infinity);
   } else if (pot_type === 'delta') {
     const w = Math.max(0.3, dx * 2);
     for (let i = 0; i < Nx; i++) if (Math.abs(x_[i]) < w / 2) V_[i] = V0_ * 5;
@@ -139,25 +167,37 @@ export function buildCN() {
 }
 
 export function initPsi() {
-  // Initial state: Gaussian wavepacket centered at x0_ with carrier k0.
-  psiR = new Float64Array(Nx);
-  psiI = new Float64Array(Nx);
-  absorbedLeftProb = 0;
-  absorbedRightProb = 0;
-  const nm = Math.pow(1 / (2 * Math.PI * sigma * sigma), 0.25);
-  for (let i = 0; i < Nx; i++) {
-    const e = Math.exp((-(x_[i] - x0_) * (x_[i] - x0_)) / (4 * sigma * sigma));
-    // Phase measured relative to the packet center for phase alignment
-    psiR[i] = nm * e * Math.cos(k0 * (x_[i] - x0_));
-    psiI[i] = nm * e * Math.sin(k0 * (x_[i] - x0_));
-  }
-  // Normalise
+  // Initial state: one Gaussian wavepacket centered at x0_ with carrier k0.
+  clearPsi();
+  addPacket(x0_);
+}
+
+function addPacket(center) {
+  // Add a unit-norm Gaussian packet (width sigma, carrier k0) to ψ.
+  // Phase is measured relative to the packet center.
   let sum = 0;
-  for (let i = 0; i < Nx; i++) sum += psiR[i] * psiR[i] + psiI[i] * psiI[i];
-  const norm = Math.sqrt(sum * dx);
   for (let i = 0; i < Nx; i++) {
-    psiR[i] /= norm;
-    psiI[i] /= norm;
+    const d = x_[i] - center;
+    sum += Math.exp((-d * d) / (2 * sigma * sigma));
+  }
+  const amp = 1 / Math.sqrt(sum * dx);
+  const pr = new Float64Array(Nx),
+    pi = new Float64Array(Nx);
+  for (let i = 0; i < Nx; i++) {
+    const d = x_[i] - center;
+    const e = amp * Math.exp((-d * d) / (4 * sigma * sigma));
+    pr[i] = e * Math.cos(k0 * d);
+    pi[i] = e * Math.sin(k0 * d);
+  }
+  // At low k0·σ a Gaussian really contains k < 0 parts that move away from
+  // the barrier from t = 0. Record that share so it never counts as reflection.
+  const { negR, negI } = splitDirectionalComponents(pr, pi);
+  let share = 0;
+  for (let i = 0; i < Nx; i++) share += negR[i] * negR[i] + negI[i] * negI[i];
+  emittedLeftShare += share * dx;
+  for (let i = 0; i < Nx; i++) {
+    psiR[i] += pr[i];
+    psiI[i] += pi[i];
   }
 }
 
@@ -207,26 +247,17 @@ export function thomas() {
 
 export function stepSim() {
   // One full time step:
-  // 0) inject continuous source if enabled, 1) build RHS with B, 2) solve with A, 
-  // 3) absorb outgoing edge waves, 4) measure flux for continuous mode, 
-  // 5) clamp any tiny numerical norm growth.
-  injectSourceWave();
+  // 0) emit the next train packet if due, 1) build RHS with B, 2) solve with A,
+  // 3) absorb outgoing edge waves.
+  // No renormalisation: Crank–Nicolson is unitary and the absorber only removes.
+  if (continuousSourceActive && step >= nextEmitStep) {
+    addPacket(x0_);
+    emittedPackets += 1;
+    nextEmitStep += getEmitIntervalSteps();
+  }
   applyB(psiR, psiI, rhsR, rhsI);
   thomas();
   applyOutgoingAbsorption();
-  measureAndAccumulateFlux();
-  if (step % 40 === 0) {
-    let normSq = 0;
-    for (let i = 0; i < Nx; i++) normSq += psiR[i] * psiR[i] + psiI[i] * psiI[i];
-    normSq *= dx;
-    if (normSq > 1.002) {
-      const scale = 1 / Math.sqrt(normSq);
-      for (let i = 0; i < Nx; i++) {
-        psiR[i] *= scale;
-        psiI[i] *= scale;
-      }
-    }
-  }
   step++;
 }
 
@@ -382,90 +413,23 @@ function drawCurve(values, toX, toY, color, isVisible, { lineWidth = 2, alpha = 
   ctx.restore();
 }
 
-function injectSourceWave() {
-  // Inject continuous source wave from SOURCE_ORIGIN if enabled
-  if (!continuousSourceActive) return;
-
-  // Ramp-in: gradual increase from 0 to full amplitude over sourceRampSteps
-  const rampFactor = Math.min(1.0, sourceRampStep / sourceRampSteps);
-  sourceRampStep += 1;
-
-  // Gaussian envelope centered at SOURCE_ORIGIN with width ~2*sigma
-  const injectionSigma = sigma;
-  const injectionNorm = Math.pow(1 / (2 * Math.PI * injectionSigma * injectionSigma), 0.25);
-
-  for (let i = 0; i < Nx; i++) {
-    const dx_i = x_[i] - SOURCE_ORIGIN;
-    const env = Math.exp(-(dx_i * dx_i) / (4 * injectionSigma * injectionSigma));
-    // Phase aligned to the shared source origin
-    const phase = Math.cos(k0 * (x_[i] - SOURCE_ORIGIN)); // Right-moving wave
-    const phaseI = Math.sin(k0 * (x_[i] - SOURCE_ORIGIN));
-
-    // Inject with ramped amplitude (dt/someScale to spread injection over time)
-    const injStr = (sourceAmplitude * rampFactor * env * injectionNorm * dt) / 10;
-    psiR[i] += injStr * phase;
-    psiI[i] += injStr * phaseI;
-  }
-
-  // Renormalize to maintain unit norm (guard against blowup)
-  let normSq = 0;
-  for (let i = 0; i < Nx; i++) normSq += psiR[i] * psiR[i] + psiI[i] * psiI[i];
-  normSq *= dx;
-  if (normSq > 1e-9 && normSq > 1.002) {
-    const scale = 1 / Math.sqrt(normSq);
-    for (let i = 0; i < Nx; i++) {
-      psiR[i] *= scale;
-      psiI[i] *= scale;
-    }
-  }
-}
-
 function applyOutgoingAbsorption() {
-  const { posR, posI, negR, negI } = splitDirectionalComponents(psiR, psiI);
+  // Damp ψ in the edge bands (mask is 1 elsewhere and 0 at the walls) and book
+  // the removed |ψ|²·dx to the side it left from.
   let leftLoss = 0;
   let rightLoss = 0;
-
-  // If continuous source is active, protect a region near SOURCE_ORIGIN from left absorber
-  const SOURCE_PROTECTED_REGION = 35;
-  const sourceProtectionActive = continuousSourceActive;
-
   for (let i = 0; i < Nx; i++) {
-    const x = x_[i];
-
-    if (x <= x_min + ABSORBER_WIDTH) {
-      // Skip left absorber if inside protected source region and continuous mode active
-      if (!(sourceProtectionActive && Math.abs(x - SOURCE_ORIGIN) < SOURCE_PROTECTED_REGION)) {
-        const edgeFraction = (x_min + ABSORBER_WIDTH - x) / ABSORBER_WIDTH;
-        const damping = Math.exp(-ABSORBER_STRENGTH * edgeFraction * edgeFraction);
-        const before = negR[i] * negR[i] + negI[i] * negI[i];
-        negR[i] *= damping;
-        negI[i] *= damping;
-        const after = negR[i] * negR[i] + negI[i] * negI[i];
-        leftLoss += before - after;
-      }
-    }
-
-    if (x >= x_max - ABSORBER_WIDTH) {
-      const edgeFraction = (x - (x_max - ABSORBER_WIDTH)) / ABSORBER_WIDTH;
-      const damping = Math.exp(-ABSORBER_STRENGTH * edgeFraction * edgeFraction);
-      const before = posR[i] * posR[i] + posI[i] * posI[i];
-      posR[i] *= damping;
-      posI[i] *= damping;
-      const after = posR[i] * posR[i] + posI[i] * posI[i];
-      rightLoss += before - after;
-    }
-
-    psiR[i] = posR[i] + negR[i];
-    psiI[i] = posI[i] + negI[i];
+    const m = absorberMask[i];
+    if (m === 1) continue;
+    const before = psiR[i] * psiR[i] + psiI[i] * psiI[i];
+    psiR[i] *= m;
+    psiI[i] *= m;
+    const lost = before * (1 - m * m);
+    if (x_[i] < 0) leftLoss += lost;
+    else rightLoss += lost;
   }
-
-  psiR[0] = 0;
-  psiI[0] = 0;
-  psiR[Nx - 1] = 0;
-  psiI[Nx - 1] = 0;
-
-  absorbedLeftProb += Math.max(0, leftLoss) * dx;
-  absorbedRightProb += Math.max(0, rightLoss) * dx;
+  absorbedLeftProb += leftLoss * dx;
+  absorbedRightProb += rightLoss * dx;
 }
 
 function clearPsi() {
@@ -475,27 +439,44 @@ function clearPsi() {
   else psiI.fill(0);
   absorbedLeftProb = 0;
   absorbedRightProb = 0;
-  sourceRampStep = 0;
-  leftFluxAccum = 0;
-  rightFluxAccum = 0;
-  fluxMeasureCount = 0;
+  emittedLeftShare = 0;
 }
 
 function getDefaultPacketCenter() {
-  // Keep the one-shot packet well inside the domain so the hard boundary
+  // Keep the packet well inside the domain so the hard boundary
   // does not clip the Gaussian and generate spurious ripples.
   const boundaryMargin = Math.max(40, 6 * sigma);
-  return Math.min(-80, SOURCE_ORIGIN + boundaryMargin);
+  return Math.min(-80, x_min + boundaryMargin);
 }
 
 function initWaveState() {
+  // Both modes start from the same packet centre; the train simply keeps
+  // adding copies of it, starting on the next stepSim().
+  x0_ = getDefaultPacketCenter();
   if (continuousSourceActive) {
-    x0_ = SOURCE_ORIGIN;
     clearPsi();
+    emittedPackets = 0;
+    nextEmitStep = step;
   } else {
-    x0_ = getDefaultPacketCenter();
     initPsi();
+    emittedPackets = 1;
   }
+}
+
+export function getEmitIntervalSteps() {
+  // Space packets ~12σ apart at the group velocity k0 (floored so a near-zero
+  // energy still gets a finite interval).
+  return Math.ceil((12 * sigma) / (Math.max(k0, 0.05) * dt));
+}
+
+export function getEmittedPackets() {
+  return emittedPackets;
+}
+
+export function getDensity() {
+  const p = new Float64Array(Nx);
+  for (let i = 0; i < Nx; i++) p[i] = psiR[i] * psiR[i] + psiI[i] * psiI[i];
+  return { x: x_, p };
 }
 
 export function computeYTickStep(ymax) {
@@ -521,52 +502,34 @@ export function computeYTickStep(ymax) {
   return bestStep;
 }
 
-function measureAndAccumulateFlux() {
-  // Measure flux components for steady-state T/R in continuous source mode
-  if (!continuousSourceActive) return;
-
-  const { posR, negR } = splitDirectionalComponents(psiR, psiI);
-
-  // Probe points: left of barrier for reflected, right of barrier for transmitted
-  const iLeft = Math.max(
-    0,
-    Math.min(Nx - 1, Math.floor(((-80 - x_min) / (x_max - x_min)) * Nx))
-  );
-  const iRight = Math.max(
-    0,
-    Math.min(Nx - 1, Math.floor(((80 - x_min) / (x_max - x_min)) * Nx))
-  );
-
-  // Reflected: negative-k component at left probe
-  const reflectedProb = negR[iLeft] * negR[iLeft];
-  
-  // Transmitted: positive-k component at right probe
-  const transmittedProb = posR[iRight] * posR[iRight];
-
-  leftFluxAccum += reflectedProb;
-  rightFluxAccum += transmittedProb;
-  fluxMeasureCount += 1;
-}
-
-export function getFluxBasedTR() {
-  // Compute steady-state T/R from accumulated flux
-  if (fluxMeasureCount < 10) {
-    // Not enough data yet; return NaN or fallback
-    return { T: NaN, R: NaN };
-  }
-
-  const avgReflected = leftFluxAccum / fluxMeasureCount;
-  const avgTransmitted = rightFluxAccum / fluxMeasureCount;
-  const total = avgReflected + avgTransmitted;
-
-  if (total < 1e-9) {
-    return { T: 0, R: 0 };
-  }
-
-  return {
-    T: Math.min(1, avgTransmitted / total),
-    R: Math.min(1, avgReflected / total),
-  };
+export function getScatteringTR() {
+  // Measured relative to the barrier, never from fixed windows:
+  //   t = |ψ|² past the barrier's right edge (or inside a step) + right-edge absorption
+  //   r = left-moving |ψ₋|² left of the barrier + left-edge absorption
+  // so the incoming packet never counts as reflected.
+  // Single packet: T = t, R = r ("so far"). Packet train: the steady-state
+  // split t/(t+r), r/(t+r), once at least half a packet has resolved.
+  const span = getBarrierSpan();
+  if (!span.hasBarrier) return { T: NaN, R: NaN };
+  const tStart =
+    span.rightIndex === Nx - 1 ? span.leftIndex : span.rightIndex + 1;
+  const { negR, negI } = splitDirectionalComponents(psiR, psiI);
+  let t = 0,
+    r = 0;
+  for (let i = tStart; i < Nx; i++) t += psiR[i] * psiR[i] + psiI[i] * psiI[i];
+  for (let i = 0; i < span.leftIndex; i++)
+    r += negR[i] * negR[i] + negI[i] * negI[i];
+  // Both are fractions of the probability that actually headed for the
+  // barrier: the packets' own left-moving share is taken out of r and of the
+  // total (it is ~0 for k0·σ ≳ 2, e.g. the defaults).
+  const incident = emittedPackets - emittedLeftShare;
+  if (!(incident > 1e-9)) return { T: NaN, R: NaN };
+  t = t * dx + absorbedRightProb;
+  r = Math.max(0, r * dx + absorbedLeftProb - emittedLeftShare);
+  if (!continuousSourceActive) return { T: t / incident, R: r / incident };
+  const perPacket = incident / emittedPackets;
+  if (t + r < 0.5 * perPacket) return { T: NaN, R: NaN };
+  return { T: t / (t + r), R: r / (t + r) };
 }
 
 export function draw() {
@@ -579,8 +542,11 @@ export function draw() {
     visibility.incident && (!barrierSpan.hasBarrier || i < barrierSpan.leftIndex);
   const reflectedVisibleAt = (i) =>
     visibility.reflected && barrierSpan.hasBarrier && i < barrierSpan.leftIndex;
+  // Starts one point early so the transmitted curve joins the incident one.
   const transmittedVisibleAt = (i) =>
-    visibility.transmitted && barrierSpan.hasBarrier && i >= barrierSpan.leftIndex;
+    visibility.transmitted &&
+    barrierSpan.hasBarrier &&
+    i >= barrierSpan.leftIndex - 1;
 
   // Draw in CSS pixel coordinates; backing store is scaled by DPR in resize().
   const W = cssW,
@@ -593,7 +559,7 @@ export function draw() {
   ctx.fillStyle = '#e8eef5';
   ctx.fillRect(58, 18, PW, PH);
 
-  // Determine y-axis scale from current wave amplitudes and potential.
+  // y-axis scale comes from the waves only; V(x) gets its own scale below.
   let maxAmp = 0,
     maxV = 0;
   for (let i = 0; i < Nx; i++) {
@@ -606,22 +572,29 @@ export function draw() {
     if (V_[i] > maxV) maxV = V_[i];
   }
   if (maxAmp < 0.001) maxAmp = 0.25;
-  let ymax = Math.ceil(Math.max(maxAmp, maxV) * 10) / 10 + 0.02;
+  let ymax = Math.ceil(maxAmp * 10) / 10 + 0.02;
   ymax = Math.max(ymax, 0.1);
   const ymin = -ymax;
   const toX = (xi) => 58 + ((xi - view_x_min) / (view_x_max - view_x_min)) * PW;
   const toY = (v) => 18 + PH - ((v - ymin) / (ymax - ymin)) * PH;
+  // V(x) is drawn so its peak sits at 80% of the wave axis, labelled in eV.
+  const toYV = (v) => toY(maxV > 0 ? (v / maxV) * 0.8 * ymax : 0);
+
+  // x-axis ticks in nm: 10 nm, or the largest of 5/2/1 nm that still gives
+  // at least 4 ticks when zoomed in.
+  const X_TICK_NM = 10;
+  const viewNm = (view_x_max - view_x_min) * NM_PER_UNIT;
+  const xTickNm =
+    [X_TICK_NM, 5, 2, 1].find((s) => viewNm / s >= 4) ?? 1;
+  const xTS = xTickNm / NM_PER_UNIT; // in sim units
+  const nFirst = Math.ceil(view_x_min / xTS);
+  const nLast = Math.floor(view_x_max / xTS);
 
   // Grid lines and frame.
   ctx.strokeStyle = 'rgba(255,255,255,0.9)';
   ctx.lineWidth = 1;
-  const xTS = 40;
-  for (
-    let xi = Math.ceil(view_x_min / xTS) * xTS;
-    xi <= view_x_max;
-    xi += xTS
-  ) {
-    const px = toX(xi);
+  for (let n = nFirst; n <= nLast; n++) {
+    const px = toX(n * xTS);
     ctx.beginPath();
     ctx.moveTo(px, 18);
     ctx.lineTo(px, 18 + PH);
@@ -651,17 +624,13 @@ export function draw() {
   }
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
-  for (
-    let xi = Math.ceil(view_x_min / xTS) * xTS;
-    xi <= view_x_max;
-    xi += xTS
-  ) {
-    if (xi >= view_x_min && xi <= view_x_max) {
-      ctx.fillText(Math.round(xi), toX(xi), 18 + PH + 6);
-    }
+  for (let n = nFirst; n <= nLast; n++) {
+    ctx.fillText(String(n * xTickNm), toX(n * xTS), 18 + PH + 6);
   }
+  ctx.textAlign = 'right';
+  ctx.fillText('x (nm)', 58 + PW, 18 + PH + 20);
 
-  // Potential V(x) overlay (filled + outline).
+  // Potential V(x) overlay (filled + outline) on its own scale.
   if (maxV > 0) {
     ctx.save();
     ctx.fillStyle = 'rgba(124,158,197,0.18)';
@@ -669,7 +638,7 @@ export function draw() {
     const y0 = toY(0);
     for (let i = 0; i < Nx; i++) {
       const px = toX(x_[i]),
-        py = toY(V_[i]);
+        py = toYV(V_[i]);
       if (i === 0) ctx.moveTo(px, y0);
       ctx.lineTo(px, py);
     }
@@ -681,11 +650,21 @@ export function draw() {
     ctx.beginPath();
     for (let i = 0; i < Nx; i++) {
       const px = toX(x_[i]),
-        py = toY(V_[i]);
+        py = toYV(V_[i]);
       if (i === 0) ctx.moveTo(px, py);
       else ctx.lineTo(px, py);
     }
     ctx.stroke();
+    // Label the barrier height above its centre (kept inside the view).
+    const labelX = Math.min(
+      Math.max((x_[barrierSpan.leftIndex] + x_[barrierSpan.rightIndex]) / 2, view_x_min),
+      view_x_max
+    );
+    ctx.fillStyle = WAVE_COLORS.potential;
+    ctx.font = '600 12px Inter,sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(`V₀ = ${V0_.toFixed(2)} eV`, toX(labelX), toYV(maxV) - 4);
     ctx.restore();
   }
 
@@ -775,53 +754,20 @@ export function draw() {
   });
   ctx.restore();
 
-  // Spatial windows for reflection/transmission estimation.
-  // Left of iL -> reflected region, right of iR -> transmitted region.
-  const iL = Math.max(
-    0,
-    Math.min(Nx - 1, Math.floor(((-50 - x_min) / (x_max - x_min)) * Nx))
-  );
-  const iR = Math.max(
-    0,
-    Math.min(Nx - 1, Math.floor(((50 - x_min) / (x_max - x_min)) * Nx))
-  );
-  // Integrate by Riemann sum (sum * dx).
-  let pL = 0,
-    pRr = 0,
-    pT = 0;
-  for (let i = 0; i < Nx; i++) {
-    if (i < iL) pL += prob[i];
-    if (i > iR) pRr += prob[i];
-    pT += prob[i];
-  }
-  pL *= dx;
-  pRr *= dx;
+  let pT = 0;
+  for (let i = 0; i < Nx; i++) pT += prob[i];
   pT *= dx;
-  
-  // Determine T/R to display: flux-based if continuous mode active, else region-integral
-  let displayR, displayT;
-  if (continuousSourceActive) {
-    const fluxTR = getFluxBasedTR();
-    if (Number.isFinite(fluxTR.T) && Number.isFinite(fluxTR.R)) {
-      displayR = fluxTR.R;
-      displayT = fluxTR.T;
-    } else {
-      // Fallback during ramp-in
-      displayR = 0;
-      displayT = 0;
-    }
-  } else {
-    // Original region-integral approach
-    displayR = Math.min(1, pL + absorbedLeftProb);
-    displayT = Math.min(1, pRr + absorbedRightProb);
-  }
-  
+
+  // NaN (shown as "—") when T/R is undefined, e.g. no barrier.
+  const { T: displayT, R: displayR } = getScatteringTR();
+  const fmtTR = (v) => (Number.isFinite(v) ? v.toFixed(4) : '—');
+
   const sT = document.getElementById('sT');
   const sR = document.getElementById('sR');
   const sN = document.getElementById('sN');
   const sE = document.getElementById('sE');
-  if (sT) sT.textContent = displayT.toFixed(4);
-  if (sR) sR.textContent = displayR.toFixed(4);
+  if (sT) sT.textContent = fmtTR(displayT);
+  if (sR) sR.textContent = fmtTR(displayR);
   if (sN) sN.textContent = pT.toFixed(4);
   if (sE) sE.textContent = ((k0 * k0) / 2).toFixed(3);
   const tr = displayR + displayT;
@@ -833,7 +779,7 @@ export function draw() {
   }
   const tDisp = document.getElementById('tDisp');
   const stDisp = document.getElementById('stDisp');
-  if (tDisp) tDisp.textContent = (step * dt).toFixed(1);
+  if (tDisp) tDisp.textContent = (step * dt * FS_PER_UNIT).toFixed(1);
   if (stDisp) stDisp.textContent = step;
 }
 
@@ -890,25 +836,32 @@ export function setBarrierPotential(value) {
     buildV();
     buildCN();
     autoZoomBarrier();
+    restartTrainIfActive();
   }
   return V0_;
 }
 
+function restartTrainIfActive() {
+  // A physics change mid-train would mix two experiments in one T/R tally.
+  if (continuousSourceActive) initWaveState();
+}
+
 export function getBarrierWidthNm() {
-  return Vw_;
+  return Vw_ * NM_PER_UNIT;
 }
 
 export function setBarrierWidthNm(value) {
   const next = Number(value);
   if (Number.isFinite(next)) {
-    Vw_ = Math.max(0.1, Math.min(60.0, next));
+    Vw_ = Math.max(0.1, Math.min(20.0, next)) / NM_PER_UNIT;
     const live = document.getElementById('bw-live');
-    if (live) live.textContent = Vw_.toFixed(1);
+    if (live) live.textContent = getBarrierWidthNm().toFixed(2);
     buildV();
     buildCN();
     autoZoomBarrier();
+    restartTrainIfActive();
   }
-  return Vw_;
+  return getBarrierWidthNm();
 }
 
 export function getParticleEnergyEv() {
@@ -918,12 +871,14 @@ export function getParticleEnergyEv() {
 export function setParticleEnergyEv(value) {
   const next = Number(value);
   if (Number.isFinite(next)) {
-    const energy = Math.max(-50.0, Math.min(50.0, next));
+    // Above ~10 eV, k·dx > 1 and the grid can no longer resolve the wave.
+    const energy = Math.max(-50.0, Math.min(10.0, next));
     k0 = Math.sqrt(Math.max(0, 2 * energy));
     const live = document.getElementById('pe-live');
     if (live) live.textContent = energy.toFixed(4);
     buildCN();
     autoZoomBarrier();
+    restartTrainIfActive();
   }
   return getParticleEnergyEv();
 }
@@ -963,6 +918,16 @@ export function getWaveNorm() {
   return normSq * dx;
 }
 
+export function getPotentialArea() {
+  let area = 0;
+  for (let i = 0; i < Nx; i++) area += V_[i];
+  return area * dx;
+}
+
+export function getAbsorbedProbability() {
+  return { left: absorbedLeftProb, right: absorbedRightProb };
+}
+
 export function setWaveOrigin(value) {
   const next = Number(value);
   if (Number.isFinite(next)) x0_ = next;
@@ -992,29 +957,20 @@ export function getContinuousSourceActive() {
 }
 
 export function setContinuousSourceActive(value) {
-  continuousSourceActive = Boolean(value);
-  if (continuousSourceActive) {
-    // Replace any existing packet with a fresh field centered at the source
-    x0_ = SOURCE_ORIGIN;
-    clearPsi();
-  }
+  const next = Boolean(value);
+  if (next === continuousSourceActive) return continuousSourceActive;
+  continuousSourceActive = next;
+  // Switching modes starts over: an empty box for the train (first packet on
+  // the next step), or a single fresh packet.
+  initWaveState();
   return continuousSourceActive;
 }
 
-export function getSourceAmplitude() {
-  return sourceAmplitude;
-}
-
-export function setSourceAmplitude(value) {
-  const next = Number(value);
-  if (Number.isFinite(next)) {
-    sourceAmplitude = Math.max(0.01, Math.min(1.0, next));
-  }
-  return sourceAmplitude;
-}
-
 export function autoZoomBarrier() {
-  const range = Math.max(24, Math.min(320, Vw_ * 80));
+  // Fit the barrier, but never so tightly that the packet's start (where
+  // the single packet and every train packet begin) leaves the view.
+  const packetReach = 2 * (Math.abs(getDefaultPacketCenter()) + 3 * sigma);
+  const range = Math.min(320, Math.max(Vw_ * 80, packetReach));
   view_x_min = -range / 2;
   view_x_max = range / 2;
 }
@@ -1023,7 +979,7 @@ export function syncModeModalFields() {
   const modeEl = document.getElementById('i-mode');
   if (modeEl) modeEl.value = timeDependent ? 'td' : 'ti';
   const widthEl = document.getElementById('i-Vw');
-  if (widthEl) widthEl.value = Vw_.toFixed(1);
+  if (widthEl) widthEl.value = getBarrierWidthNm().toFixed(2);
   const energyEl = document.getElementById('i-Eev');
   if (energyEl) energyEl.value = getParticleEnergyEv().toFixed(4);
   const speedEl = document.getElementById('i-spd');
@@ -1062,8 +1018,8 @@ export function initSimulation() {
   buildGrid();
   buildV();
   buildCN();
+  step = 0; // before initWaveState: the train's first emission is scheduled at `step`
   initWaveState();
-  step = 0;
   running = true;
   resize();
 }
@@ -1078,14 +1034,16 @@ export function changeSpeed(delta) {
 export function applyWidth() {
   // Apply all modal controls that impact the PDE state.
   pot_type = document.getElementById('i-pot').value;
-  Vw_ = parseFloat(document.getElementById('i-Vw').value);
+  setBarrierWidthNm(document.getElementById('i-Vw').value);
   setParticleEnergyEv(document.getElementById('i-Eev').value);
-  sigma = parseFloat(document.getElementById('i-sig').value);
+  const sigmaNm = parseFloat(document.getElementById('i-sig').value);
+  if (Number.isFinite(sigmaNm))
+    sigma = Math.max(0.5, Math.min(3.0, sigmaNm)) / NM_PER_UNIT;
   setSimulationSpeed(document.getElementById('i-spd').value);
   buildV();
   buildCN();
+  step = 0; // before initWaveState: the train's first emission is scheduled at `step`
   initWaveState();
-  step = 0;
 }
 
 export function applyMode() {
@@ -1104,18 +1062,12 @@ export function applyMode() {
 
 export function resetSim() {
   // Restart from the current configuration while clearing runtime state.
-  sourceRampStep = 0;
-  leftFluxAccum = 0;
-  rightFluxAccum = 0;
-  fluxMeasureCount = 0;
-  absorbedLeftProb = 0;
-  absorbedRightProb = 0;
   recenter();
 
   buildV();
   buildCN();
+  step = 0; // before initWaveState: the train's first emission is scheduled at `step`
   initWaveState();
-  step = 0;
 
   const v0Live = document.getElementById('v0-live');
   if (v0Live) v0Live.textContent = V0_.toFixed(2);
@@ -1125,11 +1077,11 @@ export function resetSim() {
   const potEl = document.getElementById('i-pot');
   if (potEl) potEl.value = pot_type;
   const widthEl = document.getElementById('i-Vw');
-  if (widthEl) widthEl.value = Vw_;
+  if (widthEl) widthEl.value = getBarrierWidthNm().toFixed(2);
   const energyEl = document.getElementById('i-Eev');
   if (energyEl) energyEl.value = getParticleEnergyEv().toFixed(4);
   const sigEl = document.getElementById('i-sig');
-  if (sigEl) sigEl.value = sigma;
+  if (sigEl) sigEl.value = (sigma * NM_PER_UNIT).toFixed(2);
   const spdEl = document.getElementById('i-spd');
   if (spdEl) spdEl.value = stepsPerFrame;
   const spdMainEl = document.getElementById('i-spd-main');

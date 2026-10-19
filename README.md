@@ -10,14 +10,17 @@ An interactive web-based physics simulation of the Quantum Tunneling Effect, vis
 - **Real-Time Scattering Visualization:** Animates incident, reflected, and transmitted wave components with tunneling decay inside the barrier, along with the potential barrier ($V(x)$).
 - **Dynamic Physics Engine:**
   - Implements the unconditionally stable **Crank-Nicolson implicitly numerical method**.
-  - Accurate numerical integration ensuring unitary evolution ($||\psi||^2 = 1$).
+  - Accurate numerical integration ensuring unitary evolution ($||\psi||^2 = 1$). There is no renormalisation; probability only leaves through the absorbing edges.
   - Built-in Thomas algorithm for fast $O(N)$ tridiagonal matrix solving.
+  - 1399-point grid with cell-averaged barrier edges. The default transmission is within 3% of the exact value.
+- **Real electron units:** energies in eV, lengths in nm and time in fs (internally ħ = m = 1; 1 length unit = 0.27605 nm, 1 time unit = 0.65821 fs).
 - **Interactive Controls:**
-  - **Barrier Configuration:** Adjust the **Height**, **Width**, and **Type** (single rectangular barrier, double slit, potential step, delta-like barrier, free particle).
-  - **Wavepacket Parameters:** Tune the initial momentum ($k_0$) and spatial spread ($\sigma$).
+  - **Barrier Configuration:** Adjust the **Height**, **Width** (0.1–20 nm; default 0.8 nm) and **Type** (single rectangular barrier, double slit, potential step, delta-like barrier, free particle).
+  - **Wavepacket Parameters:** Tune the energy (0.001–10 eV) and spatial spread σ (0.5–3 nm).
+  - **Continuous source:** emits a train of identical packets from x = −33 nm (about every 33 fs) and reports the steady-state T/R.
   - **Playback & Speed:** Modulate simulation speed during execution and freeze playback on demand.
   - **Viewport Controls:** Zoom In, Zoom Out, and Recenter functionality for detailed physics analysis.
-- **Real-Time Physics Readouts:** Live monitoring of Transmission ($T$), Reflection ($R$), Energy ($E$), and Wavepacket Norm ($||\psi||^2$).
+- **Real-Time Physics Readouts:** Live monitoring of Transmission ($T$), Reflection ($R$), Energy ($E$), and Wavepacket Norm ($||\psi||^2$). T and R are measured relative to the barrier, so the incoming packet never counts as reflected. They show "—" when undefined. See `SIMULATION_LOGIC.md` for the exact definitions.
 
 ## Project Structure
 

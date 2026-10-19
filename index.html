@@ -120,7 +120,8 @@
             <h3>Transmission &amp; Reflection</h3>
             <div class="eq">
               <span class="eq-lbl">Probabilities</span>T = ∫_{x&gt;x_R} |ψ|² dx
-              &nbsp;|&nbsp; R = ∫_{x&lt;x_L} |ψ|² dx
+              &nbsp;|&nbsp; R = ∫_{x&lt;x_L} |ψ₋|² dx &nbsp;(x_L, x_R = barrier
+              edges; ψ₋ = left-moving part; plus what the edges absorbed)
             </div>
             <h3>WKB Estimate (rectangular barrier)</h3>
             <div class="eq">
@@ -134,16 +135,19 @@
             <h2>How the Simulator Works</h2>
             <ol class="steps">
               <li>
-                <strong>Grid init:</strong> N = 700 uniform points over x ∈
-                [−160, 160], ℏ = m = 1.
+                <strong>Grid init:</strong> N = 1399 uniform points over x ∈
+                [−160, 160] in units with ℏ = m = 1 (shown for an electron:
+                1 unit = 0.276 nm, energies in eV).
               </li>
               <li>
-                <strong>Potential V(x):</strong> Chosen barrier profile
-                evaluated on the grid.
+                <strong>Potential V(x):</strong> Chosen barrier profile,
+                averaged over each grid cell so its width is exact.
               </li>
               <li>
                 <strong>Wavepacket:</strong> Normalised Gaussian ψ(x,0) with
-                momentum k₀ and spread σ, placed at x₀ = −100.
+                momentum k₀ and spread σ, placed at x₀ = −120 (−33 nm). With
+                the continuous source on, a fresh copy is added there at
+                regular intervals.
               </li>
               <li>
                 <strong>Hamiltonian:</strong> Kinetic energy via central
@@ -155,8 +159,9 @@
               </li>
               <li>
                 <strong>Time loop:</strong> (1) RHS = B·ψⁿ, (2) solve A·ψⁿ⁺¹ =
-                RHS via Thomas O(N), (3) absorb outgoing waves near ±160, (4)
-                clamp only tiny numerical norm growth.
+                RHS via Thomas O(N), (3) absorb outgoing waves in damping
+                bands near ±160. No renormalisation: the norm only falls as
+                probability leaves through the edges.
               </li>
               <li>
                 <strong>Rendering:</strong> Scattering components (incident,
@@ -164,8 +169,11 @@
                 overlay.
               </li>
               <li>
-                <strong>Readouts:</strong> T and R computed by integrating |ψ|²
-                over right/left domains in real time.
+                <strong>Readouts:</strong> T = probability past the barrier,
+                R = left-moving probability before it (each plus what the
+                edges absorbed), so the incoming packet never counts as
+                reflected. With the continuous source on, they show the
+                steady-state split.
               </li>
             </ol>
           </article>
@@ -221,15 +229,15 @@
             <span>Barrier width</span>
             <span class="quick-slider-badge">nm</span>
           </div>
-          <div class="quick-slider-live"><span id="bw-live">20.0</span> nm</div>
+          <div class="quick-slider-live"><span id="bw-live">0.80</span> nm</div>
           <label class="quick-slider-input-row" for="i-bw-main">
             <input
               type="number"
               id="i-bw-main"
               min="0.1"
-              max="60"
-              step="0.1"
-              value="20.0"
+              max="20"
+              step="0.05"
+              value="0.80"
             />
             <span class="quick-slider-unit">nm</span>
           </label>
@@ -238,14 +246,14 @@
               type="range"
               id="r-bw-main"
               min="0.1"
-              max="60"
-              step="0.1"
-              value="20.0"
+              max="20"
+              step="0.05"
+              value="0.80"
             />
           </div>
           <div class="quick-slider-scale">
             <span>0.1</span>
-            <span>60.0</span>
+            <span>20.0</span>
           </div>
         </section>
 
@@ -258,16 +266,16 @@
             <span class="quick-slider-badge">eV</span>
           </div>
           <div class="quick-slider-live">
-            <span id="pe-live">0.0549</span> eV
+            <span id="pe-live">0.7200</span> eV
           </div>
           <label class="quick-slider-input-row" for="i-pe-main">
             <input
               type="number"
               id="i-pe-main"
               min="0.001"
-              max="50.0"
+              max="10.0"
               step="0.0001"
-              value="0.0549"
+              value="0.7200"
             />
             <span class="quick-slider-unit">eV</span>
           </label>
@@ -283,7 +291,7 @@
           </div>
           <div class="quick-slider-scale">
             <span>0.001</span>
-            <span>50.0</span>
+            <span>10.0</span>
           </div>
           <div class="quick-slider-note">
             Log slider for fine low-energy control
@@ -342,9 +350,9 @@
             type="number"
             id="i-Vw"
             min="0.1"
-            max="60"
-            step="0.1"
-            value="20"
+            max="20"
+            step="0.05"
+            value="0.80"
           />
         </div>
         <div class="mrow">
@@ -353,20 +361,20 @@
             type="number"
             id="i-Eev"
             min="0.001"
-            max="50.0"
+            max="10.0"
             step="0.0001"
-            value="0.0549"
+            value="0.7200"
           />
         </div>
         <div class="mrow">
-          <label>Wavepacket spread σ</label>
+          <label>Wavepacket spread σ (nm)</label>
           <input
             type="number"
             id="i-sig"
-            min="2"
-            max="14"
-            step="0.1"
-            value="5"
+            min="0.5"
+            max="3"
+            step="0.01"
+            value="1.38"
           />
         </div>
         <div class="mrow">
@@ -435,7 +443,7 @@
           <label>Continuous source mode (Time-Dependent only)</label>
           <label class="toggle-option">
             <input type="checkbox" id="i-continuous-source" />
-            <span>Enable continuous source (flux-based T/R)</span>
+            <span>Enable continuous source (repeating packets, steady-state T/R)</span>
           </label>
         </div>
         <p class="modal-note">

@@ -1,81 +1,30 @@
 /**
- * Continuous Source Feature Tests
+ * Continuous source = a train of default Gaussian packets.
  *
- * These tests verify the continuous source injection, flux measurement,
- * and reset behavior using a lightweight document stub.
+ * Every getEmitIntervalSteps() steps a fresh copy of the single default packet
+ * (σ, k0, centre x = -120) is added at the left, so a steady stream of
+ * identical packets marches right at the group velocity k0.
  */
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import {
   applyMode,
-  buildCN,
-  buildGrid,
-  buildV,
   getContinuousSourceActive,
-  getFluxBasedTR,
+  getEmitIntervalSteps,
+  getEmittedPackets,
+  getScatteringTR,
   getStepCount,
   getWaveNorm,
-  initSimulation,
-  initPsi,
   resetSim,
   setContinuousSourceActive,
-  setWaveOrigin,
+  setParticleEnergyEv,
   stepSim,
   syncModeModalFields,
   x0_,
 } from './simulation.js';
+import { centroid, installDom, loadScenario, run } from './test-helpers.js';
 
 const originalDocument = globalThis.document;
-let elements = {};
-
-function createElement(overrides = {}) {
-  return {
-    value: '',
-    checked: false,
-    textContent: '',
-    ...overrides,
-  };
-}
-
-function installDom(nextElements) {
-  elements = nextElements;
-  globalThis.document = {
-    getElementById(id) {
-      return elements[id] ?? null;
-    },
-  };
-}
-
-function setupDom() {
-  installDom({
-    'i-mode': createElement({ value: 'td' }),
-    'i-continuous-source': createElement({ checked: false }),
-    modeBadge: createElement({ textContent: 'T-DEPENDENT' }),
-    'i-pot': createElement({ value: 'single' }),
-    'i-Vw': createElement({ value: '20' }),
-    'i-Eev': createElement({ value: '0.7200' }),
-    'i-sig': createElement({ value: '5' }),
-    'i-spd': createElement({ value: '4' }),
-    'i-spd-main': createElement({ value: '4' }),
-    'v0-live': createElement({ textContent: '1.00' }),
-    'spd-live': createElement({ textContent: '4' }),
-    'spd-live-main': createElement({ textContent: '4' }),
-  });
-}
-
-function initSimulationState() {
-  buildGrid();
-  buildV();
-  buildCN();
-  initPsi();
-}
-
-beforeEach(() => {
-  setupDom();
-  setContinuousSourceActive(false);
-  setWaveOrigin(-160);
-  initSimulationState();
-});
 
 afterEach(() => {
   globalThis.document = originalDocument;
@@ -83,6 +32,7 @@ afterEach(() => {
 
 describe('Continuous source mode', () => {
   it('enables and disables with the mode selector', () => {
+    loadScenario();
     document.getElementById('i-continuous-source').checked = true;
     applyMode();
     expect(getContinuousSourceActive()).toBe(true);
@@ -93,8 +43,7 @@ describe('Continuous source mode', () => {
   });
 
   it('preserves the selected checkbox on reset', () => {
-    document.getElementById('i-continuous-source').checked = true;
-    applyMode();
+    loadScenario({ continuous: true });
     expect(getContinuousSourceActive()).toBe(true);
 
     resetSim();
@@ -104,66 +53,88 @@ describe('Continuous source mode', () => {
     expect(getStepCount()).toBe(0);
     expect(() => syncModeModalFields()).not.toThrow();
   });
-
-  it('starts continuous mode from a zeroed field during init', () => {
-    setContinuousSourceActive(true);
-
-    expect(() => initSimulation()).not.toThrow();
-    expect(x0_).toBe(-160);
-    expect(getWaveNorm()).toBe(0);
-    expect(() => stepSim()).not.toThrow();
-  });
-
-  it('clears the existing packet when continuous mode is enabled mid-run', () => {
-    setWaveOrigin(-100);
-    initPsi();
-    expect(getWaveNorm()).toBeCloseTo(1, 6);
-
-    setContinuousSourceActive(true);
-
-    expect(getContinuousSourceActive()).toBe(true);
-    expect(x0_).toBe(-160);
-    expect(getWaveNorm()).toBe(0);
-    expect(getFluxBasedTR()).toEqual({ T: NaN, R: NaN });
-  });
 });
 
-describe('Flux-based readout', () => {
-  it('returns bounded T/R after accumulating measurements', () => {
-    document.getElementById('i-continuous-source').checked = true;
-    applyMode();
-
-    for (let i = 0; i < 24; i += 1) {
-      stepSim();
-    }
-
-    const tr = getFluxBasedTR();
-    expect(Number.isFinite(tr.T)).toBe(true);
-    expect(Number.isFinite(tr.R)).toBe(true);
-    expect(tr.T).toBeGreaterThanOrEqual(0);
-    expect(tr.T).toBeLessThanOrEqual(1);
-    expect(tr.R).toBeGreaterThanOrEqual(0);
-    expect(tr.R).toBeLessThanOrEqual(1);
-    expect(tr.T + tr.R).toBeLessThanOrEqual(1.01);
+describe('Packet train', () => {
+  it('emits the default packet at x = -120 on the first step', () => {
+    loadScenario({ continuous: true });
+    stepSim();
+    expect(getEmittedPackets()).toBe(1);
+    expect(getWaveNorm()).toBeCloseTo(1, 4);
+    expect(centroid()).toBeCloseTo(-120, 0);
   });
 
-  it('is stable across repeated reads', () => {
-    document.getElementById('i-continuous-source').checked = true;
-    applyMode();
+  it('moves right at the group velocity k0 = 1.2', () => {
+    loadScenario({ continuous: true });
+    run(500); // t = 25, before the 2nd packet
+    // -120 + 1.2 * 25 = -90
+    expect(centroid()).toBeGreaterThan(-91);
+    expect(centroid()).toBeLessThan(-89);
+  });
 
-    for (let i = 0; i < 24; i += 1) {
-      stepSim();
-    }
+  it('emits a new packet every getEmitIntervalSteps() steps', () => {
+    loadScenario({ continuous: true });
+    expect(getEmitIntervalSteps()).toBe(1000);
+    run(2001);
+    expect(getEmittedPackets()).toBe(3);
+  });
 
-    const first = getFluxBasedTR();
-    const second = getFluxBasedTR();
-    expect(first.T).toBeCloseTo(second.T, 10);
-    expect(first.R).toBeCloseTo(second.R, 10);
+  it('shows no T/R until half a packet has resolved', () => {
+    loadScenario({ continuous: true });
+    run(1500);
+    expect(getScatteringTR().R).toBeNaN();
+  });
+
+  it('steady-state T matches the single-packet value', () => {
+    loadScenario({ continuous: true });
+    run(8000);
+    const { T, R } = getScatteringTR();
+    expect(T).toBeGreaterThan(0.048);
+    expect(T).toBeLessThan(0.058);
+    expect(T + R).toBeCloseTo(1, 9);
+  });
+
+  it('restarts the train when energy changes', () => {
+    loadScenario({ continuous: true });
+    run(3000);
+    setParticleEnergyEv(0.5);
+    expect(getEmittedPackets()).toBe(0);
+    expect(getWaveNorm()).toBe(0);
+    stepSim();
+    expect(getEmittedPackets()).toBe(1);
+  });
+
+  it('RESET restarts the train with a packet on the next step', () => {
+    loadScenario({ continuous: true });
+    run(3000);
+    resetSim();
+    stepSim();
+    expect(getEmittedPackets()).toBe(1);
+  });
+
+  it('low-energy train shows no T/R before any packet reaches the barrier', () => {
+    loadScenario({ continuous: true, energyEv: '0.001' });
+    run(30000); // 2 packets out; the first reaches the barrier near step 53700
+    expect(getScatteringTR().R).toBeNaN(); // was 1.0000
+  });
+
+  it('low-energy emission interval is finite', () => {
+    loadScenario({ continuous: true, energyEv: '0.001' });
+    expect(getEmitIntervalSteps()).toBeLessThanOrEqual(24000);
+  });
+
+  it('disabling restores a single packet at -120', () => {
+    loadScenario({ continuous: true });
+    run(100);
+    setContinuousSourceActive(false);
+    expect(getWaveNorm()).toBeCloseTo(1, 6);
+    expect(x0_).toBe(-120);
   });
 });
 
 describe('Mode modal sync', () => {
   it('syncs the mode fields without throwing', () => {
+    loadScenario();
     document.getElementById('i-mode').value = 'ti';
     document.getElementById('i-continuous-source').checked = true;
     applyMode();

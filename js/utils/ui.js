@@ -84,16 +84,16 @@ function updateQuickParameterDisplays() {
   const widthValue = document.getElementById("bw-live");
   const energyValue = document.getElementById("pe-live");
   const potentialValue = document.getElementById("v0-live");
-  if (widthValue) widthValue.textContent = width.toFixed(1);
+  if (widthValue) widthValue.textContent = width.toFixed(2);
   if (energyValue) energyValue.textContent = energy.toFixed(4);
   if (potentialValue)
     potentialValue.textContent = getBarrierPotential().toFixed(2);
 
   const widthInput = document.getElementById("i-bw-main");
-  if (widthInput) widthInput.value = width.toFixed(1);
+  if (widthInput) widthInput.value = width.toFixed(2);
   const widthRange = document.getElementById("r-bw-main");
   if (widthRange) {
-    widthRange.value = width.toFixed(1);
+    widthRange.value = width.toFixed(2);
     paintSliderTrack(
       widthRange,
       ((width - Number(widthRange.min)) /
@@ -114,13 +114,13 @@ function updateQuickParameterDisplays() {
   }
 
   const widthModal = document.getElementById("i-Vw");
-  if (widthModal) widthModal.value = width.toFixed(1);
+  if (widthModal) widthModal.value = width.toFixed(2);
   const energyModal = document.getElementById("i-Eev");
   if (energyModal) energyModal.value = energy.toFixed(4);
 }
 
 const ENERGY_MIN = 0.001;
-const ENERGY_MAX = 50.0;
+const ENERGY_MAX = 10.0;
 const ENERGY_SLIDER_MAX = 1000;
 const DRAWER_STORAGE_KEY = "qt-info-drawer-open";
 
@@ -229,9 +229,9 @@ function initQuickParameterControls() {
 
   const applyWidthValue = (value) => {
     const nextWidth = setBarrierWidthNm(
-      clampValue(parseControlValue(value), 0.1, 60, getBarrierWidthNm()),
+      clampValue(parseControlValue(value), 0.1, 20, getBarrierWidthNm()),
     );
-    if (widthInput) widthInput.value = nextWidth.toFixed(1);
+    if (widthInput) widthInput.value = nextWidth.toFixed(2);
     updateQuickParameterDisplays();
   };
 
@@ -472,9 +472,9 @@ function sanitizeNumberInput(
 
 document.addEventListener("DOMContentLoaded", () => {
   const numberConfig = [
-    { id: "i-Vw", min: 0.1, max: 60, fallback: 20, decimals: 1 },
-    { id: "i-Eev", min: 0.001, max: 50.0, fallback: 0.0549, decimals: 4 },
-    { id: "i-sig", min: 2, max: 14, fallback: 5, decimals: 1 },
+    { id: "i-Vw", min: 0.1, max: 20, fallback: 0.8, decimals: 2 },
+    { id: "i-Eev", min: 0.001, max: 10.0, fallback: 0.72, decimals: 4 },
+    { id: "i-sig", min: 0.5, max: 3, fallback: 1.38, decimals: 2 },
   ];
 
   numberConfig.forEach((cfg) => {

@@ -57,38 +57,40 @@ describe("smart barrier auto-scaling", () => {
     globalThis.document = originalDocument;
   });
 
+  // Narrow barriers zoom in only as far as keeps the packet start in view:
+  // range = 2·(|x0| + 3σ) = 2·(120 + 15) = 270 for the default σ = 5.
   it("auto-fits the viewport for extremely narrow barriers", () => {
-    setBarrierWidthNm(0.3);
+    setBarrierWidthNm(0.1);
 
     const viewport = getViewportBounds();
-    expect(viewport.range).toBeCloseTo(24, 6);
+    expect(viewport.range).toBeCloseTo(270, 6);
     expect(viewport.center).toBeCloseTo(0, 1);
   });
 
   it("reapplies the smart fit after energy or potential updates", () => {
-    setBarrierWidthNm(0.3);
+    setBarrierWidthNm(0.1);
     recenter();
     setParticleEnergyEv(-0.4);
 
     let viewport = getViewportBounds();
-    expect(viewport.range).toBeCloseTo(24, 6);
+    expect(viewport.range).toBeCloseTo(270, 6);
     expect(viewport.center).toBeCloseTo(0, 1);
 
     recenter();
     setBarrierPotential(1.0);
 
     viewport = getViewportBounds();
-    expect(viewport.range).toBeCloseTo(24, 6);
+    expect(viewport.range).toBeCloseTo(270, 6);
     expect(viewport.center).toBeCloseTo(0, 1);
   });
 
   it("keeps manual zoom centered on the barrier and clamped to the domain", () => {
-    setBarrierWidthNm(0.3);
+    setBarrierWidthNm(0.1);
     recenter();
     zoomIn();
 
     let viewport = getViewportBounds();
-    expect(viewport.range).toBeCloseTo(128, 6);
+    expect(viewport.range).toBeCloseTo(240, 6);
     expect(viewport.center).toBeCloseTo(0, 1);
 
     autoZoomBarrier();

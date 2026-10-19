@@ -56,14 +56,25 @@ describe("5.2 Unit tests — small ymax values preserve yTS = 0.05", () => {
   });
 });
 
-// ── 5.3 Unit test — xTS = 40 is present and unmodified in source ──────────────
+// ── 5.3 Unit test — x-axis ticks are a fixed step in nm ──────────────────────
 
-describe("5.3 X-axis tick step xTS = 40 is not affected by the yTS change", () => {
-  it('simulation.js source contains "const xTS = 40" (X-axis hardcoded step unchanged)', () => {
-    // **Validates: Requirements 3.3**
+describe("5.3 X-axis tick step is fixed in nm, independent of the yTS logic", () => {
+  it("x-axis ticks are in nm", () => {
     const __filename = fileURLToPath(import.meta.url);
     const __dirname = dirname(__filename);
     const source = readFileSync(join(__dirname, "simulation.js"), "utf8");
-    expect(source).toContain("const xTS = 40");
+    expect(source).toContain("const X_TICK_NM = 10");
+  });
+});
+
+describe("In-app 'How the Simulator Works' panel matches the engine", () => {
+  it("states the current grid, start point and readout, not the old ones", () => {
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = dirname(__filename);
+    const html = readFileSync(join(__dirname, "..", "..", "index.html"), "utf8");
+    expect(html).toContain("N = 1399");
+    expect(html).not.toContain("N = 700");
+    expect(html).not.toContain("x₀ = −100");
+    expect(html).not.toContain("clamp only tiny numerical norm growth");
   });
 });

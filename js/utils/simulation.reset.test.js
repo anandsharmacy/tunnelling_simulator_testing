@@ -13,6 +13,7 @@ import {
   getStepCount,
   initPsi,
   isTimeDependentMode,
+  NM_PER_UNIT,
   pot_type,
   resetSim,
   setBarrierPotential,
@@ -47,7 +48,7 @@ describe("resetSim", () => {
       "i-pot": createElement({ value: "delta" }),
       "i-Vw": createElement({ value: "11.5" }),
       "i-Eev": createElement({ value: "0.1250" }),
-      "i-sig": createElement({ value: "7.3" }),
+      "i-sig": createElement({ value: "2.0" }),
       "i-spd": createElement({ value: "6" }),
       "i-spd-main": createElement({ value: "6" }),
       "spd-live": createElement({ textContent: "6" }),
@@ -88,7 +89,7 @@ describe("resetSim", () => {
     expect(pot_type).toBe("delta");
     expect(getBarrierWidthNm()).toBeCloseTo(11.5, 6);
     expect(getParticleEnergyEv()).toBeCloseTo(0.125, 6);
-    expect(sigma).toBeCloseTo(7.3, 6);
+    expect(sigma * NM_PER_UNIT).toBeCloseTo(2.0, 6);
     expect(getSimulationSpeed()).toBe(6);
     expect(isTimeDependentMode()).toBe(false);
     expect(getScatteringVisibility()).toEqual({
