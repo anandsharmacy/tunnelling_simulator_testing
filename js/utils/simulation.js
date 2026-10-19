@@ -20,7 +20,8 @@ const hbar = 1,
   x_max = 160;
 let view_x_min = x_min,
   view_x_max = x_max;
-const Nx = 700,
+// dx = 320/1398 ≈ 0.229 (≈ 23 points per wavelength at the default k0 = 1.2).
+const Nx = 1399,
   dt = 0.05;
 let step = 0,
   running = true,
@@ -98,20 +99,32 @@ export function buildGrid() {
   absorberMask[0] = absorberMask[Nx - 1] = 0; // Dirichlet walls
 }
 
+function cellOverlap(xi, a, b) {
+  // Fraction of the grid cell [xi - dx/2, xi + dx/2] that lies inside [a, b].
+  // Averaging V over each cell keeps the barrier's width exact instead of
+  // snapping its edges to whole cells.
+  return (
+    Math.max(0, Math.min(xi + dx / 2, b) - Math.max(xi - dx / 2, a)) / dx
+  );
+}
+
 export function buildV() {
   // Build potential profile V(x) for the selected barrier type.
   V_ = new Float64Array(Nx);
   if (pot_type === 'none') return;
   if (pot_type === 'single') {
-    for (let i = 0; i < Nx; i++) if (Math.abs(x_[i]) < Vw_ / 2) V_[i] = V0_;
+    for (let i = 0; i < Nx; i++)
+      V_[i] = V0_ * cellOverlap(x_[i], -Vw_ / 2, Vw_ / 2);
   } else if (pot_type === 'double') {
     const g = 30,
       w = Math.min(Vw_, 14);
     for (let i = 0; i < Nx; i++)
-      if (Math.abs(x_[i] + g / 2) < w / 2 || Math.abs(x_[i] - g / 2) < w / 2)
-        V_[i] = V0_;
+      V_[i] =
+        V0_ *
+        (cellOverlap(x_[i], -g / 2 - w / 2, -g / 2 + w / 2) +
+          cellOverlap(x_[i], g / 2 - w / 2, g / 2 + w / 2));
   } else if (pot_type === 'step') {
-    for (let i = 0; i < Nx; i++) if (x_[i] > 0) V_[i] = V0_;
+    for (let i = 0; i < Nx; i++) V_[i] = V0_ * cellOverlap(x_[i], 0, Infinity);
   } else if (pot_type === 'delta') {
     const w = Math.max(0.3, dx * 2);
     for (let i = 0; i < Nx; i++) if (Math.abs(x_[i]) < w / 2) V_[i] = V0_ * 5;
@@ -924,6 +937,12 @@ export function getWaveNorm() {
   let normSq = 0;
   for (let i = 0; i < Nx; i++) normSq += psiR[i] * psiR[i] + psiI[i] * psiI[i];
   return normSq * dx;
+}
+
+export function getPotentialArea() {
+  let area = 0;
+  for (let i = 0; i < Nx; i++) area += V_[i];
+  return area * dx;
 }
 
 export function getAbsorbedProbability() {

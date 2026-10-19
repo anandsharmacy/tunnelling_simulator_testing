@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   getAbsorbedProbability,
   getBarrierWidthNm,
+  getPotentialArea,
   getScatteringTR,
   getViewportBounds,
   getWaveNorm,
@@ -117,5 +118,27 @@ describe('scattering readout', () => {
     // Counting only past the step's far end would give ~0 here.
     expect(T).toBeGreaterThan(0.83);
     expect(T).toBeLessThan(0.9);
+  });
+});
+
+describe('accuracy', () => {
+  it('discrete barrier has exactly the requested width', () => {
+    loadScenario();
+    expect(getPotentialArea()).toBeCloseTo(0.8 / NM_PER_UNIT, 9); // V0 = 1
+  });
+
+  it('default transmission is within 4% of the exact packet-averaged value 0.0536', () => {
+    loadScenario();
+    run(6000);
+    const { T } = getScatteringTR();
+    expect(T).toBeGreaterThan(0.0515);
+    expect(T).toBeLessThan(0.0557);
+  });
+
+  it('over-barrier leak through a 5.52 nm barrier is resolved', () => {
+    loadScenario({ widthNm: '5.521' });
+    run(6000);
+    // Exact 0.0059; old grid 0.0022; new grid ≈ 0.0042
+    expect(getScatteringTR().T).toBeGreaterThan(0.0035);
   });
 });
