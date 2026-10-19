@@ -522,8 +522,11 @@ export function draw() {
     visibility.incident && (!barrierSpan.hasBarrier || i < barrierSpan.leftIndex);
   const reflectedVisibleAt = (i) =>
     visibility.reflected && barrierSpan.hasBarrier && i < barrierSpan.leftIndex;
+  // Starts one point early so the transmitted curve joins the incident one.
   const transmittedVisibleAt = (i) =>
-    visibility.transmitted && barrierSpan.hasBarrier && i >= barrierSpan.leftIndex;
+    visibility.transmitted &&
+    barrierSpan.hasBarrier &&
+    i >= barrierSpan.leftIndex - 1;
 
   // Draw in CSS pixel coordinates; backing store is scaled by DPR in resize().
   const W = cssW,
@@ -536,7 +539,7 @@ export function draw() {
   ctx.fillStyle = '#e8eef5';
   ctx.fillRect(58, 18, PW, PH);
 
-  // Determine y-axis scale from current wave amplitudes and potential.
+  // y-axis scale comes from the waves only; V(x) gets its own scale below.
   let maxAmp = 0,
     maxV = 0;
   for (let i = 0; i < Nx; i++) {
@@ -549,22 +552,29 @@ export function draw() {
     if (V_[i] > maxV) maxV = V_[i];
   }
   if (maxAmp < 0.001) maxAmp = 0.25;
-  let ymax = Math.ceil(Math.max(maxAmp, maxV) * 10) / 10 + 0.02;
+  let ymax = Math.ceil(maxAmp * 10) / 10 + 0.02;
   ymax = Math.max(ymax, 0.1);
   const ymin = -ymax;
   const toX = (xi) => 58 + ((xi - view_x_min) / (view_x_max - view_x_min)) * PW;
   const toY = (v) => 18 + PH - ((v - ymin) / (ymax - ymin)) * PH;
+  // V(x) is drawn so its peak sits at 80% of the wave axis, labelled in eV.
+  const toYV = (v) => toY(maxV > 0 ? (v / maxV) * 0.8 * ymax : 0);
+
+  // x-axis ticks in nm: 10 nm, or the largest of 5/2/1 nm that still gives
+  // at least 4 ticks when zoomed in.
+  const X_TICK_NM = 10;
+  const viewNm = (view_x_max - view_x_min) * NM_PER_UNIT;
+  const xTickNm =
+    [X_TICK_NM, 5, 2, 1].find((s) => viewNm / s >= 4) ?? 1;
+  const xTS = xTickNm / NM_PER_UNIT; // in sim units
+  const nFirst = Math.ceil(view_x_min / xTS);
+  const nLast = Math.floor(view_x_max / xTS);
 
   // Grid lines and frame.
   ctx.strokeStyle = 'rgba(255,255,255,0.9)';
   ctx.lineWidth = 1;
-  const xTS = 40;
-  for (
-    let xi = Math.ceil(view_x_min / xTS) * xTS;
-    xi <= view_x_max;
-    xi += xTS
-  ) {
-    const px = toX(xi);
+  for (let n = nFirst; n <= nLast; n++) {
+    const px = toX(n * xTS);
     ctx.beginPath();
     ctx.moveTo(px, 18);
     ctx.lineTo(px, 18 + PH);
@@ -594,17 +604,13 @@ export function draw() {
   }
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
-  for (
-    let xi = Math.ceil(view_x_min / xTS) * xTS;
-    xi <= view_x_max;
-    xi += xTS
-  ) {
-    if (xi >= view_x_min && xi <= view_x_max) {
-      ctx.fillText(Math.round(xi), toX(xi), 18 + PH + 6);
-    }
+  for (let n = nFirst; n <= nLast; n++) {
+    ctx.fillText(String(n * xTickNm), toX(n * xTS), 18 + PH + 6);
   }
+  ctx.textAlign = 'right';
+  ctx.fillText('x (nm)', 58 + PW, 18 + PH + 20);
 
-  // Potential V(x) overlay (filled + outline).
+  // Potential V(x) overlay (filled + outline) on its own scale.
   if (maxV > 0) {
     ctx.save();
     ctx.fillStyle = 'rgba(124,158,197,0.18)';
@@ -612,7 +618,7 @@ export function draw() {
     const y0 = toY(0);
     for (let i = 0; i < Nx; i++) {
       const px = toX(x_[i]),
-        py = toY(V_[i]);
+        py = toYV(V_[i]);
       if (i === 0) ctx.moveTo(px, y0);
       ctx.lineTo(px, py);
     }
@@ -624,11 +630,21 @@ export function draw() {
     ctx.beginPath();
     for (let i = 0; i < Nx; i++) {
       const px = toX(x_[i]),
-        py = toY(V_[i]);
+        py = toYV(V_[i]);
       if (i === 0) ctx.moveTo(px, py);
       else ctx.lineTo(px, py);
     }
     ctx.stroke();
+    // Label the barrier height above its centre (kept inside the view).
+    const labelX = Math.min(
+      Math.max((x_[barrierSpan.leftIndex] + x_[barrierSpan.rightIndex]) / 2, view_x_min),
+      view_x_max
+    );
+    ctx.fillStyle = WAVE_COLORS.potential;
+    ctx.font = '600 12px Inter,sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(`V₀ = ${V0_.toFixed(2)} eV`, toX(labelX), toYV(maxV) - 4);
     ctx.restore();
   }
 
