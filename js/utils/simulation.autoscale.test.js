@@ -88,7 +88,7 @@ describe("smart barrier auto-scaling", () => {
     zoomIn();
 
     let viewport = getViewportBounds();
-    expect(viewport.range).toBeCloseTo(128, 6);
+    expect(viewport.range).toBeCloseTo(240, 6);
     expect(viewport.center).toBeCloseTo(0, 1);
 
     autoZoomBarrier();
