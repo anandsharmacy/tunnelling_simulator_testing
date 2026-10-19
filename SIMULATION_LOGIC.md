@@ -39,8 +39,20 @@ In code:
 
 - Constants: `hbar = 1`, `m_ = 1`
 - Spatial domain: `x ∈ [x_min, x_max]` where `x_min = -160`, `x_max = 160`
-- Grid points: `Nx = 700` (uniform grid)
+- Grid points: `Nx = 1399` (uniform grid, `dx ≈ 0.229`, about 23 points per wavelength at the default `k0 = 1.2`)
 - Time step: `dt = 0.05`
+
+### Units shown in the UI
+
+The engine works in units where ħ = m = 1. The UI treats the particle as an **electron** with energies in **eV**, which fixes the other units:
+
+| Quantity | Engine unit | Real value | Constant |
+|---|---|---|---|
+| Energy | 1 | 1 eV | (none needed) |
+| Length | 1 | ħ/√(mₑ·eV) = 0.27605 nm | `NM_PER_UNIT` |
+| Time | 1 | ħ/eV = 0.65821 fs | `FS_PER_UNIT` |
+
+Conversion happens only at the boundary: `setBarrierWidthNm`/`getBarrierWidthNm`, the σ input in `applyWidth`, the nm x-axis, and the fs time readout. Defaults: V₀ = 1.00 eV, E = 0.72 eV (`k0 = 1.2`), barrier width 0.8 nm, σ = 1.38 nm (5 engine units), packet starting at x = −120 (−33.1 nm). Inputs are limited to width 0.1–20 nm, σ 0.5–3 nm and energy 0.001–10 eV. Above about 10 eV, k·dx > 1 and the grid can no longer resolve the wave.
 
 ### Spatial discretization
 
@@ -62,13 +74,15 @@ In code:
 - **`delta`**: a narrow spike around `x = 0` (implemented as a thin rectangle)
 - **`none`**: free particle (`V_` left as zeros)
 
+Barrier edges are **cell-averaged** (`cellOverlap`): each grid point gets V₀ times the fraction of its cell `[x − dx/2, x + dx/2]` that lies inside the barrier. The discrete barrier therefore has exactly the requested width (`getPotentialArea() = V₀·width`), and thin barriers no longer snap to whole cells.
+
 When the user changes height/width/type, the code rebuilds `V_` and recomputes solver coefficients.
 
 ### Initial wavepacket
 
-`initPsi()` constructs a normalized Gaussian wavepacket:
+`initPsi()` clears ψ and adds one normalized Gaussian wavepacket (`addPacket(x0_)`):
 
-- Center: `x0_` is initialized a safe distance inside the domain for one-shot packets
+- Center: `x0_ = getDefaultPacketCenter()`, which is −120 for the default σ (at least 40 units, and at least 6σ, from the left wall)
 - Spread: `sigma`
 - Wavenumber: `k0` (sets momentum and energy)
 
@@ -102,14 +116,30 @@ In code (`buildCN()`):
 
 Each discrete time step (`stepSim()`):
 
+- In continuous-source mode, adds the next train packet if one is due (see below)
 - Computes `rhs = B * ψ^n` via `applyB(...)`
 - Solves `A * ψ^{n+1} = rhs` using a fast **Thomas algorithm** (`thomas()`)
-- Applies boundary conditions by setting endpoints to zero in `applyB()`
-- Every 40 steps, performs a small renormalization to control numerical drift
+- Applies the edge absorber (`applyOutgoingAbsorption()`)
+
+There is **no renormalisation**. Crank–Nicolson is unitary, and the absorber only removes probability, so the norm can only stay the same or fall.
 
 The variable `step` is incremented each solver step, and displayed time is:
 
-- `t = step * dt`
+- `t = step * dt * FS_PER_UNIT` (in fs)
+
+### Absorbing edges
+
+The outermost 24 units at each end are damping bands. `buildGrid()` precomputes `absorberMask[i] = exp(−γ·dt·s²)`, where `s` runs from 0 at the inner edge of the band to 1 at the wall, and γ = 1.5 (`ABSORBER_GAMMA`). The wall points themselves are 0 (Dirichlet). Each step multiplies ψ by the mask and books the removed |ψ|²·dx to `absorbedLeftProb` or `absorbedRightProb`. A free packet run through the right band loses more than 99.8% there and sends back less than 10⁻⁴.
+
+The band damps ψ itself, not separately split right- and left-moving parts. An earlier version split ψ with an FFT and damped one part. The two parts have long cancelling tails, so damping one created probability (norm reached 1.0016) and "absorbed" probability at the edges before any wave got there.
+
+### Continuous source (packet train)
+
+With "Enable continuous source" ticked, `stepSim()` adds a fresh copy of the default packet at `x0_` (−120) every `getEmitIntervalSteps()` steps:
+
+- `getEmitIntervalSteps() = ceil(12σ / (max(k0, 0.05)·dt))`. That is 1000 steps (≈ 33 fs) at the defaults, so packets are about 16.6 nm apart.
+- Each packet has norm 1, so the probability in the box (shown as Norm) counts the packets currently in flight.
+- Turning the mode on or off, RESET, or changing energy, width or height restarts it with an empty box (`emittedPackets = 0`). The first packet goes out on the next step.
 
 ### “Speed” control
 
@@ -161,9 +191,9 @@ No resampling occurs; the same underlying grid arrays are mapped to screen coord
 In order:
 
 - Background and plot background
-- Gridlines + axis ticks/labels
-- Potential \(V(x)\) (filled region + outline)
-- Scattering curves:
+- Gridlines + axis ticks/labels (x in nm: 10 nm ticks, or 5/2/1 nm when zoomed in far enough that 10 nm would give fewer than 4)
+- Potential \(V(x)\) (filled region + outline) on its **own scale**: its peak sits at 80% of the wave axis and is labelled `V₀ = … eV`. The y-axis is set by the wave amplitudes only, so a tall barrier no longer squashes the wave
+- Scattering curves (the right-moving curve is drawn red left of the barrier and teal from the barrier's first point onward, so the two join):
   - incident wave in red
   - reflected wave in blue
   - transmitted wave in teal
@@ -197,14 +227,15 @@ Resizing is triggered via:
 
 ## Live statistics (T, R, norm, energy)
 
-In `draw()`, the code computes:
+`draw()` shows the norm ∫|ψ|²dx and the result of `getScatteringTR()`. That function measures everything relative to the barrier (`getBarrierSpan()`), never from fixed windows:
 
-- Probability density:
-  - `prob[i] = psiR[i]^2 + psiI[i]^2`
-- Integrals (approximate, via sums times `dx`) over:
-  - Left region: `R` estimate
-  - Right region: `T` estimate
-  - Total: norm estimate
+- `t` = |ψ|² past the barrier's right edge, plus `absorbedRightProb`. For a step potential (the barrier reaches the right wall), it is everything from the step onward.
+- `r` = |ψ₋|² left of the barrier, plus `absorbedLeftProb`. ψ₋ is the left-moving part of ψ, from an FFT split. The incoming packet is right-moving, so it never counts as reflected.
+- **Single packet:** T = t and R = r, i.e. "so far". Both read 0 until the packet reaches the barrier, then grow to their final values. At the defaults the final values are T ≈ 0.052 and R ≈ 0.948, against an exact value of 0.0536 averaged over the packet's momentum spread.
+- **Packet train:** the steady-state split T = t/(t+r) and R = r/(t+r). It shows "—" until at least half a packet has resolved.
+- No barrier (`pot_type = 'none'`): T and R are undefined and show "—".
+
+Numerical Mode, for the same electron (0.72 eV, 1 eV, 0.8 nm), gives the plane-wave value T = 0.0415 at exactly E = 0.72 eV. The simulator's packet value is higher because the packet carries a spread of energies, and its higher-energy part tunnels more easily.
 
 The displayed energy uses the free-particle relation:
 
@@ -229,7 +260,7 @@ All UI handlers live in `js/utils/ui.js` and call exported functions from `js/ut
 - **Speed +/- or speed slider**: `changeSpeed(...)` → changes `stepsPerFrame`
 - **Zoom in/out/recenter**: updates the view range only (no physics changes)
 - **Width modal “Apply”**: `applyWidth()` updates `pot_type`, `Vw_`, `k0`, `sigma`, `stepsPerFrame`, then rebuilds potential/solver and reinitializes ψ
-- **Mode modal “Apply”**: `applyMode()` toggles `timeDependent`
+- **Mode modal “Apply”**: `applyMode()` toggles `timeDependent` and the continuous source (packet train). The source is only available in time-dependent mode, and changing it restarts the run
 - **RESET**: `resetSim()` restores defaults and rebuilds everything
 
 ## Common failure mode (offline blank screen)
