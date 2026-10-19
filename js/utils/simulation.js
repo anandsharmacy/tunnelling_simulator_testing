@@ -53,8 +53,11 @@ const WAVE_COLORS = {
   probability: '#a263ea',
 };
 
+// Edge bands that damp ψ itself: probability only ever leaves the box, and
+// the lost amount is booked to the side it left from.
 const ABSORBER_WIDTH = 24;
-const ABSORBER_STRENGTH = 0.45;
+const ABSORBER_GAMMA = 1.5; // damping rate at the outer wall, per time unit
+let absorberMask;
 
 let absorbedLeftProb = 0;
 let absorbedRightProb = 0;
@@ -81,7 +84,18 @@ export function buildGrid() {
   // Uniform spatial grid x[i] over [x_min, x_max].
   dx = (x_max - x_min) / (Nx - 1);
   x_ = new Float64Array(Nx);
-  for (let i = 0; i < Nx; i++) x_[i] = x_min + i * dx;
+  absorberMask = new Float64Array(Nx);
+  for (let i = 0; i < Nx; i++) {
+    x_[i] = x_min + i * dx;
+    // Depth fraction into the nearest edge band: 0 at its inner edge, 1 at the wall.
+    const depth = Math.max(
+      0,
+      (x_min + ABSORBER_WIDTH - x_[i]) / ABSORBER_WIDTH,
+      (x_[i] - (x_max - ABSORBER_WIDTH)) / ABSORBER_WIDTH
+    );
+    absorberMask[i] = Math.exp(-ABSORBER_GAMMA * dt * depth * depth);
+  }
+  absorberMask[0] = absorberMask[Nx - 1] = 0; // Dirichlet walls
 }
 
 export function buildV() {
@@ -211,26 +225,14 @@ export function thomas() {
 
 export function stepSim() {
   // One full time step:
-  // 0) inject continuous source if enabled, 1) build RHS with B, 2) solve with A, 
-  // 3) absorb outgoing edge waves, 4) measure flux for continuous mode, 
-  // 5) clamp any tiny numerical norm growth.
+  // 0) inject continuous source if enabled, 1) build RHS with B, 2) solve with A,
+  // 3) absorb outgoing edge waves, 4) measure flux for continuous mode.
+  // No renormalisation: Crank–Nicolson is unitary and the absorber only removes.
   injectSourceWave();
   applyB(psiR, psiI, rhsR, rhsI);
   thomas();
   applyOutgoingAbsorption();
   measureAndAccumulateFlux();
-  if (step % 40 === 0) {
-    let normSq = 0;
-    for (let i = 0; i < Nx; i++) normSq += psiR[i] * psiR[i] + psiI[i] * psiI[i];
-    normSq *= dx;
-    if (normSq > 1.002) {
-      const scale = 1 / Math.sqrt(normSq);
-      for (let i = 0; i < Nx; i++) {
-        psiR[i] *= scale;
-        psiI[i] *= scale;
-      }
-    }
-  }
   step++;
 }
 
@@ -425,51 +427,22 @@ function injectSourceWave() {
 }
 
 function applyOutgoingAbsorption() {
-  const { posR, posI, negR, negI } = splitDirectionalComponents(psiR, psiI);
+  // Damp ψ in the edge bands (mask is 1 elsewhere and 0 at the walls) and book
+  // the removed |ψ|²·dx to the side it left from.
   let leftLoss = 0;
   let rightLoss = 0;
-
-  // If continuous source is active, protect a region near SOURCE_ORIGIN from left absorber
-  const SOURCE_PROTECTED_REGION = 35;
-  const sourceProtectionActive = continuousSourceActive;
-
   for (let i = 0; i < Nx; i++) {
-    const x = x_[i];
-
-    if (x <= x_min + ABSORBER_WIDTH) {
-      // Skip left absorber if inside protected source region and continuous mode active
-      if (!(sourceProtectionActive && Math.abs(x - SOURCE_ORIGIN) < SOURCE_PROTECTED_REGION)) {
-        const edgeFraction = (x_min + ABSORBER_WIDTH - x) / ABSORBER_WIDTH;
-        const damping = Math.exp(-ABSORBER_STRENGTH * edgeFraction * edgeFraction);
-        const before = negR[i] * negR[i] + negI[i] * negI[i];
-        negR[i] *= damping;
-        negI[i] *= damping;
-        const after = negR[i] * negR[i] + negI[i] * negI[i];
-        leftLoss += before - after;
-      }
-    }
-
-    if (x >= x_max - ABSORBER_WIDTH) {
-      const edgeFraction = (x - (x_max - ABSORBER_WIDTH)) / ABSORBER_WIDTH;
-      const damping = Math.exp(-ABSORBER_STRENGTH * edgeFraction * edgeFraction);
-      const before = posR[i] * posR[i] + posI[i] * posI[i];
-      posR[i] *= damping;
-      posI[i] *= damping;
-      const after = posR[i] * posR[i] + posI[i] * posI[i];
-      rightLoss += before - after;
-    }
-
-    psiR[i] = posR[i] + negR[i];
-    psiI[i] = posI[i] + negI[i];
+    const m = absorberMask[i];
+    if (m === 1) continue;
+    const before = psiR[i] * psiR[i] + psiI[i] * psiI[i];
+    psiR[i] *= m;
+    psiI[i] *= m;
+    const lost = before * (1 - m * m);
+    if (x_[i] < 0) leftLoss += lost;
+    else rightLoss += lost;
   }
-
-  psiR[0] = 0;
-  psiI[0] = 0;
-  psiR[Nx - 1] = 0;
-  psiI[Nx - 1] = 0;
-
-  absorbedLeftProb += Math.max(0, leftLoss) * dx;
-  absorbedRightProb += Math.max(0, rightLoss) * dx;
+  absorbedLeftProb += leftLoss * dx;
+  absorbedRightProb += rightLoss * dx;
 }
 
 function clearPsi() {
@@ -966,6 +939,10 @@ export function getWaveNorm() {
   let normSq = 0;
   for (let i = 0; i < Nx; i++) normSq += psiR[i] * psiR[i] + psiI[i] * psiI[i];
   return normSq * dx;
+}
+
+export function getAbsorbedProbability() {
+  return { left: absorbedLeftProb, right: absorbedRightProb };
 }
 
 export function setWaveOrigin(value) {
