@@ -58,32 +58,32 @@ describe("smart barrier auto-scaling", () => {
   });
 
   it("auto-fits the viewport for extremely narrow barriers", () => {
-    setBarrierWidthNm(0.3);
+    setBarrierWidthNm(0.1);
 
     const viewport = getViewportBounds();
-    expect(viewport.range).toBeCloseTo(24, 6);
+    expect(viewport.range).toBeCloseTo((0.1 / 0.27605) * 80, 6);
     expect(viewport.center).toBeCloseTo(0, 1);
   });
 
   it("reapplies the smart fit after energy or potential updates", () => {
-    setBarrierWidthNm(0.3);
+    setBarrierWidthNm(0.1);
     recenter();
     setParticleEnergyEv(-0.4);
 
     let viewport = getViewportBounds();
-    expect(viewport.range).toBeCloseTo(24, 6);
+    expect(viewport.range).toBeCloseTo((0.1 / 0.27605) * 80, 6);
     expect(viewport.center).toBeCloseTo(0, 1);
 
     recenter();
     setBarrierPotential(1.0);
 
     viewport = getViewportBounds();
-    expect(viewport.range).toBeCloseTo(24, 6);
+    expect(viewport.range).toBeCloseTo((0.1 / 0.27605) * 80, 6);
     expect(viewport.center).toBeCloseTo(0, 1);
   });
 
   it("keeps manual zoom centered on the barrier and clamped to the domain", () => {
-    setBarrierWidthNm(0.3);
+    setBarrierWidthNm(0.1);
     recenter();
     zoomIn();
 

@@ -9,6 +9,10 @@ let cssW = 0,
 let resizeObserver = null;
 // Internal simulation units:
 // hbar = 1 and m = 1 simplify TDSE updates and keep arithmetic stable.
+// For an electron with energies in eV, one length unit is hbar/sqrt(m_e·eV)
+// and one time unit is hbar/eV. Convert only at the UI boundary.
+export const NM_PER_UNIT = 0.27605,
+  FS_PER_UNIT = 0.65821;
 const hbar = 1,
   m_ = 1,
   SOURCE_ORIGIN = -160,
@@ -27,7 +31,7 @@ export let k0 = 1.2,
   x0_ = SOURCE_ORIGIN,
   pot_type = 'single',
   V0_ = 1.0,
-  Vw_ = 20;
+  Vw_ = 0.8 / NM_PER_UNIT;
 let dx, x_, psiR, psiI, V_;
 let A_dR, A_dI, B_dR, B_dI, A_oI, B_oI, cpR, cpI, rhsR, rhsI;
 let fftWorkspace = null;
@@ -833,7 +837,7 @@ export function draw() {
   }
   const tDisp = document.getElementById('tDisp');
   const stDisp = document.getElementById('stDisp');
-  if (tDisp) tDisp.textContent = (step * dt).toFixed(1);
+  if (tDisp) tDisp.textContent = (step * dt * FS_PER_UNIT).toFixed(1);
   if (stDisp) stDisp.textContent = step;
 }
 
@@ -895,20 +899,20 @@ export function setBarrierPotential(value) {
 }
 
 export function getBarrierWidthNm() {
-  return Vw_;
+  return Vw_ * NM_PER_UNIT;
 }
 
 export function setBarrierWidthNm(value) {
   const next = Number(value);
   if (Number.isFinite(next)) {
-    Vw_ = Math.max(0.1, Math.min(60.0, next));
+    Vw_ = Math.max(0.1, Math.min(20.0, next)) / NM_PER_UNIT;
     const live = document.getElementById('bw-live');
-    if (live) live.textContent = Vw_.toFixed(1);
+    if (live) live.textContent = getBarrierWidthNm().toFixed(2);
     buildV();
     buildCN();
     autoZoomBarrier();
   }
-  return Vw_;
+  return getBarrierWidthNm();
 }
 
 export function getParticleEnergyEv() {
@@ -918,7 +922,8 @@ export function getParticleEnergyEv() {
 export function setParticleEnergyEv(value) {
   const next = Number(value);
   if (Number.isFinite(next)) {
-    const energy = Math.max(-50.0, Math.min(50.0, next));
+    // Above ~10 eV, k·dx > 1 and the grid can no longer resolve the wave.
+    const energy = Math.max(-50.0, Math.min(10.0, next));
     k0 = Math.sqrt(Math.max(0, 2 * energy));
     const live = document.getElementById('pe-live');
     if (live) live.textContent = energy.toFixed(4);
@@ -1023,7 +1028,7 @@ export function syncModeModalFields() {
   const modeEl = document.getElementById('i-mode');
   if (modeEl) modeEl.value = timeDependent ? 'td' : 'ti';
   const widthEl = document.getElementById('i-Vw');
-  if (widthEl) widthEl.value = Vw_.toFixed(1);
+  if (widthEl) widthEl.value = getBarrierWidthNm().toFixed(2);
   const energyEl = document.getElementById('i-Eev');
   if (energyEl) energyEl.value = getParticleEnergyEv().toFixed(4);
   const speedEl = document.getElementById('i-spd');
@@ -1078,9 +1083,11 @@ export function changeSpeed(delta) {
 export function applyWidth() {
   // Apply all modal controls that impact the PDE state.
   pot_type = document.getElementById('i-pot').value;
-  Vw_ = parseFloat(document.getElementById('i-Vw').value);
+  setBarrierWidthNm(document.getElementById('i-Vw').value);
   setParticleEnergyEv(document.getElementById('i-Eev').value);
-  sigma = parseFloat(document.getElementById('i-sig').value);
+  const sigmaNm = parseFloat(document.getElementById('i-sig').value);
+  if (Number.isFinite(sigmaNm))
+    sigma = Math.max(0.5, Math.min(3.0, sigmaNm)) / NM_PER_UNIT;
   setSimulationSpeed(document.getElementById('i-spd').value);
   buildV();
   buildCN();
@@ -1125,11 +1132,11 @@ export function resetSim() {
   const potEl = document.getElementById('i-pot');
   if (potEl) potEl.value = pot_type;
   const widthEl = document.getElementById('i-Vw');
-  if (widthEl) widthEl.value = Vw_;
+  if (widthEl) widthEl.value = getBarrierWidthNm().toFixed(2);
   const energyEl = document.getElementById('i-Eev');
   if (energyEl) energyEl.value = getParticleEnergyEv().toFixed(4);
   const sigEl = document.getElementById('i-sig');
-  if (sigEl) sigEl.value = sigma;
+  if (sigEl) sigEl.value = (sigma * NM_PER_UNIT).toFixed(2);
   const spdEl = document.getElementById('i-spd');
   if (spdEl) spdEl.value = stepsPerFrame;
   const spdMainEl = document.getElementById('i-spd-main');
